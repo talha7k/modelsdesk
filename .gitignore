@@ -1,6 +1,11 @@
 /target/
 # internal publish runbook (varlock/npm mechanics — local only)
 /docs/publish.md
+# env + secrets wiring (pass references — local only)
+/.env.schema
+/.env
+/.env.local
+/.env.*.local
 # prebuilt platform binaries (staged at publish time, never committed)
 /npm/platforms/*/bin/
 /npm/*.tgz

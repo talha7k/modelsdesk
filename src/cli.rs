@@ -20,9 +20,11 @@ use clap::{Parser, Subcommand};
         Config lives at <config-dir>/modeldesk/config.toml — edit it directly\n\
         or use `modeldesk profile add`. Logs at <data-dir>/modeldesk/logs/.",
     after_help = "EXAMPLES:\n    \
+        modeldesk search qwen3 8b\n    \
+        modeldesk setup mlx-community/Qwen3-8B-8bit --start\n    \
         modeldesk start --foreground\n    \
         modeldesk use qwen3-8b --provider llama-cpp\n    \
-        modeldesk profile add lfm-2.5-8b LiquidAI/LFM2.5-8B-A1B-MLX-4bit --drafter LiquidAI/LFM2.5-8B-A1B-DSpark\n    \
+        modeldesk outdated\n    \
         modeldesk doctor\n    \
         modeldesk health --json | jq .",
     arg_required_else_help = true
@@ -34,7 +36,7 @@ pub struct Cli {
         long,
         global = true,
         help = "Emit machine-readable JSON where supported",
-        long_help = "Emit machine-readable JSON instead of human output.\nSupported by: health, models, providers, use, doctor, search, setup."
+        long_help = "Emit machine-readable JSON instead of human output.\nSupported by: health, models, providers, use, doctor, search, setup, outdated, sync-agents."
     )]
     pub json: bool,
     #[arg(
@@ -50,8 +52,9 @@ pub enum Commands {
     #[command(
         about = "Start the active model server",
         long_about = "Validate the active profile (provider installed, format\n\
-            compatible, enough RAM, port free), then launch the backend with\n\
-            animated progress. First run downloads weights — expect minutes.",
+            compatible, enough RAM, port free), auto-install a missing backend\n\
+            (brew/pipx, unless --no-install), then launch with animated\n\
+            progress. First run downloads weights — expect minutes.",
         after_help = "EXAMPLES:\n    \
             modeldesk start\n    \
             modeldesk start --foreground    # attach; Ctrl-C stops the server"
@@ -67,9 +70,11 @@ pub enum Commands {
     },
     #[command(
         about = "Stop the running model server",
-        long_about = "Stop the server modeldesk started. Only ever kills its own\n\
-            backend process on the configured port — never a foreign process\n\
-            (if another tool holds the port, it is left alone and reported)."
+        long_about = "Stop the inference server on the configured port. Matches\n\
+            backend binaries (mlx-dspark, mlx_lm, llama-server, ollama) on our\n\
+            port — regardless of who launched them. A non-backend process on\n\
+            the port (Expo, another tool) can never match and is reported by\n\
+            name instead of killed."
     )]
     Stop,
     #[command(
@@ -177,7 +182,8 @@ pub enum Commands {
             exists on HuggingFace, recommend (or take) the backend, run the\n\
             full doctor validation, download weights (ollama pull, or first\n\
             start for the rest), save the profile, and optionally start\n\
-            serving immediately.",
+            serving immediately.\n\
+            Missing backends auto-install unless --no-install.",
         after_help = "EXAMPLES:\n    \
             modeldesk setup mlx-community/Qwen3-8B-8bit\n    \
             modeldesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start\n    \
@@ -238,6 +244,7 @@ pub enum Commands {
         after_help = "EXAMPLES:\n    \
             modeldesk doctor\n    \
             modeldesk doctor qwen3-8b\n    \
+            modeldesk doctor --fix\n    \
             modeldesk doctor --json"
     )]
     Doctor {

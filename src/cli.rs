@@ -59,6 +59,11 @@ pub enum Commands {
     Start {
         #[arg(long, help = "Run in foreground (attach to server output)")]
         foreground: bool,
+        #[arg(
+            long,
+            help = "Don't auto-install a missing backend (fail with the install command instead)"
+        )]
+        no_install: bool,
     },
     #[command(
         about = "Stop the running model server",
@@ -189,6 +194,11 @@ pub enum Commands {
         drafter: Option<String>,
         #[arg(long, help = "Start serving immediately after setup")]
         start: bool,
+        #[arg(
+            long,
+            help = "Don't auto-install a missing backend (fail with the install command instead)"
+        )]
+        no_install: bool,
     },
     #[command(
         about = "Sync OpenCode/jcode configs to the active model",
@@ -201,6 +211,24 @@ pub enum Commands {
             modeldesk use qwen3-8b && modeldesk sync-agents"
     )]
     SyncAgents,
+    #[command(
+        about = "Show outdated backends and stale cached models",
+        long_about = "Check every installed backend against its newest release\n\
+            (PyPI / brew livecheck / GitHub releases) and every cached model\n\
+            against its HuggingFace lastModified. Network-dependent; skips\n\
+            quietly unreachable sources as 'unknown' instead of failing.",
+        after_help = "EXAMPLES:\n    \
+            modeldesk outdated\n    \
+            modeldesk outdated --json"
+    )]
+    Outdated {
+        #[arg(
+            long,
+            hide = true,
+            help = "Refresh the ambient warning cache and exit silently"
+        )]
+        refresh_cache: bool,
+    },
     #[command(
         about = "Validate the active model against provider + machine",
         long_about = "Pre-flight check without starting anything: provider\n\
@@ -215,6 +243,11 @@ pub enum Commands {
     Doctor {
         #[arg(help = "Profile name to check (default: active profile)")]
         name: Option<String>,
+        #[arg(
+            long,
+            help = "Install the missing backend automatically when not found"
+        )]
+        fix: bool,
     },
     #[command(
         about = "Manage stored model profiles",

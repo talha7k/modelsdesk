@@ -33,6 +33,10 @@ impl Provider for MlxDspark {
             .context("mlx-dspark not found (pipx install mlx-dspark)")
     }
 
+    fn min_version(&self) -> Option<(u64, u64, u64)> {
+        Some((0, 17, 0))
+    }
+
     fn start_args(&self, entry: &ModelEntry, host: &str, port: u16) -> Result<Vec<String>> {
         let mut args = vec![
             "serve".to_string(),

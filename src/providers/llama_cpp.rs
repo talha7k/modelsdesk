@@ -26,6 +26,42 @@ impl Provider for LlamaCpp {
         anyhow::bail!("llama-server not found (brew install llama.cpp)")
     }
 
+    fn min_version(&self) -> Option<(u64, u64, u64)> {
+        // b5000+ ships the OpenAI-compatible /health + /v1 routes modeldesk uses.
+        Some((5000, 0, 0))
+    }
+
+    async fn fetch_weights(&self, entry: &ModelEntry) -> Result<Option<PathBuf>> {
+        use crate::runtime_install::gguf_cache_path;
+        let repo = entry.repo.clone();
+        // Local file: verify + use directly.
+        for candidate in [&repo, &shellexpand(&repo)] {
+            let p = PathBuf::from(candidate);
+            if p.is_file() {
+                return Ok(Some(p));
+            }
+        }
+        // HF repo: resolve a GGUF file and download it into the cache.
+        let files = crate::hub::repo_files(&repo).await?;
+        let ggufs: Vec<&String> = files
+            .iter()
+            .filter(|f| f.to_lowercase().ends_with(".gguf"))
+            .collect();
+        if ggufs.is_empty() {
+            anyhow::bail!("repo '{repo}' has no .gguf files for llama.cpp");
+        }
+        let picked = pick_gguf(&ggufs).to_string();
+        let dest = gguf_cache_path(&repo, Some(&picked));
+        if dest.is_file() {
+            return Ok(Some(dest));
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        download_hf(&repo, &picked, &dest).await?;
+        Ok(Some(dest))
+    }
+
     fn start_args(&self, entry: &ModelEntry, host: &str, port: u16) -> Result<Vec<String>> {
         let mut args = vec![
             "--model".to_string(),
@@ -90,4 +126,64 @@ fn which(name: &str) -> Result<PathBuf> {
         }
     }
     Err(anyhow::anyhow!("{name} not on PATH"))
+}
+
+fn shellexpand(p: &str) -> String {
+    if let Some(rest) = p.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest).to_string_lossy().to_string();
+        }
+    }
+    p.to_string()
+}
+
+/// Prefer balanced quants: Q4_K_M > Q4_0 > Q5_K_M > Q8_0 > first available.
+fn pick_gguf<'a>(files: &[&'a String]) -> &'a str {
+    for prefer in ["q4_k_m", "q4_0", "q5_k_m", "q8_0"] {
+        if let Some(f) = files.iter().find(|f| f.to_lowercase().contains(prefer)) {
+            return f;
+        }
+    }
+    files[0]
+}
+
+async fn download_hf(repo: &str, file: &str, dest: &PathBuf) -> Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+    let url = format!("https://huggingface.co/{repo}/resolve/main/{file}");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3600))
+        .build()?;
+    let resp = client.get(&url).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("downloading {repo}/{file}: HTTP {}", resp.status());
+    }
+    let total = resp.content_length().unwrap_or(0);
+    let tty = console::Term::stdout().is_term();
+    let pb = ProgressBar::new(total);
+    if tty {
+        pb.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta}) {msg}",
+            )?,
+        );
+        pb.set_message(file.to_string());
+    } else {
+        pb.set_draw_target(indicatif::ProgressDrawTarget::hidden());
+        println!("downloading {repo}/{file} ({} MB)…", total / 1_048_576);
+    }
+    let mut out = tokio::fs::File::create(dest).await?;
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        out.write_all(&chunk).await?;
+        pb.inc(chunk.len() as u64);
+    }
+    out.flush().await?;
+    pb.finish_and_clear();
+    if !tty {
+        println!("cached {}", dest.display());
+    }
+    Ok(())
 }

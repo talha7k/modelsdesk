@@ -10,7 +10,7 @@ use modeldesk::compat;
 use modeldesk::config::{Config, ModelEntry};
 use modeldesk::error::ModeldeskError;
 use modeldesk::providers::ServerStatus;
-use modeldesk::{agents, hub, models, output, platform, providers, server, watch};
+use modeldesk::{agents, freshness, hub, models, output, platform, providers, server, watch};
 
 fn main() {
     if let Err(e) = run() {
@@ -45,8 +45,21 @@ async fn run() -> Result<()> {
         );
     }
 
+    // Ambient outdated warnings: every command except the checker itself,
+    // completions, and machine-readable runs. Cache-gated (6h), non-blocking.
+    // (Computed before the match moves `cli.command`.)
+    let ambient_skip = matches!(cli.command, Commands::Outdated { .. })
+        || matches!(cli.command, Commands::Completions { .. })
+        || cli.json;
+
     match cli.command {
-        Commands::Start { foreground } => {
+        Commands::Start {
+            foreground,
+            no_install,
+        } => {
+            if no_install {
+                std::env::set_var("MODELDESK_NO_INSTALL", "1");
+            }
             let cfg = Config::load()?;
             let entry = cfg.active_entry()?;
             if foreground {
@@ -119,7 +132,11 @@ async fn run() -> Result<()> {
             provider,
             drafter,
             start,
+            no_install,
         } => {
+            if no_install {
+                std::env::set_var("MODELDESK_NO_INSTALL", "1");
+            }
             let mut cfg = Config::load()?;
             run_setup(
                 &mut cfg,
@@ -132,13 +149,23 @@ async fn run() -> Result<()> {
             )
             .await?;
         }
-        Commands::Doctor { name } => {
+        Commands::Doctor { name, fix } => {
             let cfg = Config::load()?;
-            run_doctor(&cfg, name.as_deref(), cli.json)?;
+            run_doctor(&cfg, name.as_deref(), fix, cli.json)?;
         }
         Commands::SyncAgents => {
             let cfg = Config::load()?;
             agents::sync(&cfg, false, cli.json)?;
+        }
+        Commands::Outdated { refresh_cache } => {
+            let cfg = Config::load()?;
+            if refresh_cache {
+                // Background refresh worker: silent, cache-only, never warns.
+                let report = freshness::full_check(&cfg).await;
+                let _ = report;
+                return Ok(());
+            }
+            run_outdated(&cfg, cli.json).await?;
         }
         Commands::Profile { command } => {
             let mut cfg = Config::load()?;
@@ -209,6 +236,11 @@ async fn run() -> Result<()> {
                 ),
                 _ => anyhow::bail!("unknown shell '{shell}' (bash, zsh, fish, powershell, elvish)"),
             }
+        }
+    }
+    if !ambient_skip {
+        if let Ok(cfg) = Config::load() {
+            freshness::maybe_warn(&cfg);
         }
     }
     Ok(())
@@ -467,19 +499,41 @@ async fn run_use(
 }
 
 fn run_providers(json: bool) {
+    use modeldesk::runtime_env::Env;
+    let env = Env::detect();
     let rows: Vec<serde_json::Value> = providers::all()
         .iter()
         .map(|p| {
-            let status = match p.binary() {
-                Ok(path) => serde_json::json!({"installed": true, "path": path.to_string_lossy()}),
-                Err(e) => serde_json::json!({"installed": false, "hint": e.to_string()}),
+            let (status, version) = match p.binary() {
+                Ok(path) => {
+                    let ver = p.installed_version().unwrap_or(None);
+                    (
+                        serde_json::json!({"installed": true, "path": path.to_string_lossy()}),
+                        ver,
+                    )
+                }
+                Err(e) => (
+                    serde_json::json!({"installed": false, "hint": e.to_string()}),
+                    None,
+                ),
             };
-            serde_json::json!({
+            let mut row = serde_json::json!({
                 "id": p.id(),
                 "display": p.display(),
                 "platforms": provider_platforms(p.id()),
+                "supported_here": env.supports(p.id()),
                 "status": status,
-            })
+            });
+            if let Some(v) = version {
+                row["version"] = serde_json::json!(v);
+                if let Some(min) = p.min_version() {
+                    row["min_version"] =
+                        serde_json::json!(format!("{}.{}.{}", min.0, min.1, min.2));
+                    row["version_ok"] =
+                        serde_json::json!(providers::version_meets(&v, min));
+                }
+            }
+            row
         })
         .collect();
     if json {
@@ -507,8 +561,26 @@ fn run_providers(json: bool) {
             .unwrap_or(false)
         {
             let path = status.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+            let ver = row
+                .get("version")
+                .and_then(|v| v.as_str())
+                .map(|v| format!("v{v}"))
+                .unwrap_or_default();
+            let vok = match row.get("version_ok").and_then(|v| v.as_bool()) {
+                Some(true) => String::new(),
+                Some(false) => {
+                    let want = row.get("min_version").and_then(|v| v.as_str()).unwrap_or("?");
+                    format!(" {}", output::warn(&format!("old, want ≥{want}")))
+                }
+                None => String::new(),
+            };
+            let sup = if row.get("supported_here").and_then(|v| v.as_bool()).unwrap_or(true) {
+                String::new()
+            } else {
+                format!(" {}", output::err("unsupported here"))
+            };
             println!(
-                "  {} {} {} {}",
+                "  {} {} {} {} {ver}{vok}{sup}",
                 output::ok(id),
                 output::dim(display),
                 output::dim(&format!("[{plats}]")),
@@ -587,7 +659,7 @@ fn run_pull(cfg: &Config, name: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn run_doctor(cfg: &Config, name: Option<&str>, json: bool) -> Result<()> {
+fn run_doctor(cfg: &Config, name: Option<&str>, fix: bool, json: bool) -> Result<()> {
     let entry = match name {
         Some(n) => cfg
             .resolve(n)
@@ -601,16 +673,56 @@ fn run_doctor(cfg: &Config, name: Option<&str>, json: bool) -> Result<()> {
 
     let provider = providers::for_entry(&entry);
     match provider.binary() {
-        Ok(path) => checks.push(serde_json::json!({
-            "check": "provider-installed", "ok": true,
-            "detail": path.to_string_lossy(),
-        })),
-        Err(_) => {
-            failed = true;
+        Ok(path) => {
+            let mut detail = path.to_string_lossy().to_string();
+            match provider.installed_version().unwrap_or(None) {
+                Some(v) => {
+                    detail.push_str(&format!(" (v{v})"));
+                    if let Some(min) = provider.min_version() {
+                        if providers::version_meets(&v, min) {
+                            detail.push_str(" ✓");
+                        } else {
+                            detail.push_str(&format!(
+                                " (old, want ≥{}.{}.{})",
+                                min.0, min.1, min.2
+                            ));
+                        }
+                    }
+                }
+                None => detail.push_str(" (version unknown)"),
+            }
             checks.push(serde_json::json!({
-                "check": "provider-installed", "ok": false,
-                "detail": format!("backend '{}' not found", entry.provider),
+                "check": "provider-installed", "ok": true, "detail": detail,
             }));
+        }
+        Err(_) => {
+            if fix && !modeldesk::runtime_install::no_install_mode() {
+                use modeldesk::runtime_env::Env;
+                let env = Env::detect();
+                match modeldesk::runtime_install::plan(provider.id(), &env)
+                    .and_then(|p| modeldesk::runtime_install::run_plan(&p).map(|_| p))
+                {
+                    Ok(_) => {
+                        checks.push(serde_json::json!({
+                            "check": "provider-installed", "ok": true,
+                            "detail": "installed via --fix",
+                        }));
+                    }
+                    Err(e) => {
+                        failed = true;
+                        checks.push(serde_json::json!({
+                            "check": "provider-installed", "ok": false,
+                            "detail": format!("backend '{}' not found; install failed: {e:#}", entry.provider),
+                        }));
+                    }
+                }
+            } else {
+                failed = true;
+                checks.push(serde_json::json!({
+                    "check": "provider-installed", "ok": false,
+                    "detail": format!("backend '{}' not found (rerun with --fix to install)", entry.provider),
+                }));
+            }
         }
     }
 
@@ -991,6 +1103,116 @@ fn shellexpand(p: &str) -> String {
         }
     }
     p.to_string()
+}
+
+async fn run_outdated(cfg: &Config, json: bool) -> Result<()> {
+    let tty = console::Term::stdout().is_term();
+    let pb = ProgressBar::new_spinner();
+    if tty {
+        pb.set_style(ProgressStyle::with_template("{spinner:.green} {msg}")?);
+        pb.set_message("checking backends + cached models…");
+        pb.enable_steady_tick(Duration::from_millis(80));
+    }
+    let mut backends = Vec::new();
+    for p in providers::all() {
+        backends.push(freshness::check_backend(&*p).await);
+    }
+    let mut models_out = Vec::new();
+    for m in models::local_models(cfg) {
+        models_out.push(freshness::check_model(&m.repo).await);
+    }
+    if tty {
+        pb.finish_and_clear();
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "backends": backends, "models": models_out,
+            }))?
+        );
+        return Ok(());
+    }
+    println!("{}", output::bold("backends:"));
+    let mut all_current = true;
+    for b in &backends {
+        use freshness::Freshness as F;
+        let line = match b.status {
+            F::Current => format!(
+                "  {} {} v{}",
+                output::ok(&b.backend),
+                output::dim("current"),
+                b.installed.as_deref().unwrap_or("?")
+            ),
+            F::UpdateAvailable => {
+                all_current = false;
+                format!(
+                    "  {} v{} → v{}  {}",
+                    output::warn(&b.backend),
+                    b.installed.as_deref().unwrap_or("?"),
+                    b.latest.as_deref().unwrap_or("?"),
+                    output::dim(b.update_cmd.as_deref().unwrap_or(""))
+                )
+            }
+            F::BelowMinimum => {
+                all_current = false;
+                format!(
+                    "  {} v{} {}  {}",
+                    output::err(&b.backend),
+                    b.installed.as_deref().unwrap_or("?"),
+                    output::err("below minimum — upgrade now"),
+                    output::dim(b.update_cmd.as_deref().unwrap_or(""))
+                )
+            }
+            F::Unknown => format!(
+                "  {} {} {}",
+                output::dim(&format!("? {}", b.backend)),
+                output::dim(&format!(
+                    "v{} (latest unknown — offline?)",
+                    b.installed.as_deref().unwrap_or("?")
+                )),
+                output::dim("")
+            ),
+            F::NotInstalled => format!(
+                "  {} {}",
+                output::dim(&format!("○ {}", b.backend)),
+                output::dim("not installed")
+            ),
+        };
+        println!("{line}");
+    }
+    println!("\n{}", output::bold("cached models:"));
+    for m in &models_out {
+        use freshness::Freshness as F;
+        match m.status {
+            F::Current => println!(
+                "  {} {} {}",
+                output::ok(&m.repo),
+                output::dim("up to date"),
+                output::dim(m.cached_snapshot.as_deref().unwrap_or(""))
+            ),
+            F::UpdateAvailable => {
+                all_current = false;
+                println!(
+                    "  {} {} (upstream {})  {}",
+                    output::warn(&m.repo),
+                    output::dim("stale"),
+                    output::dim(m.upstream_modified.as_deref().unwrap_or("?")),
+                    output::dim("re-pull to refresh")
+                );
+            }
+            F::Unknown | F::BelowMinimum => println!(
+                "  {} {}",
+                output::dim(&m.repo),
+                output::dim("upstream unreachable — cannot compare")
+            ),
+            F::NotInstalled => println!("  {} {}", output::dim(&m.repo), output::dim("not cached")),
+        }
+    }
+    if all_current {
+        println!("\n{}", output::ok("everything current"));
+    }
+    Ok(())
 }
 
 fn hint_for(e: &anyhow::Error) -> Option<String> {

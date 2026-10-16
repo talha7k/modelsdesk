@@ -113,6 +113,18 @@ fn port_listening(port: u16) -> bool {
 }
 
 pub async fn start(cfg: &Config, entry: &ModelEntry, foreground: bool) -> Result<()> {
+    start_with_options(cfg, entry, foreground, true).await
+}
+
+/// Launch the backend. When `ensure` is true (default path), the runtime is
+/// installed when missing, the version is gated, and weights are fetched —
+/// so `start` self-heals instead of failing on environment gaps.
+pub async fn start_with_options(
+    cfg: &Config,
+    entry: &ModelEntry,
+    foreground: bool,
+    ensure: bool,
+) -> Result<()> {
     if matches!(server_status(cfg), ServerStatus::Running { .. }) {
         let holder = compat::port_holder(cfg.port).unwrap_or_else(|| "another process".to_string());
         return Err(ModeldeskError::PortBusy {
@@ -126,11 +138,32 @@ pub async fn start(cfg: &Config, entry: &ModelEntry, foreground: bool) -> Result
         eprintln!("note: {note}");
     }
     let provider = providers::for_entry(entry);
+    if ensure {
+        ensure_runtime(&*provider, entry).await?;
+    }
     let bin = provider.binary().map_err(|_| ModeldeskError::ProviderMissing {
         provider: entry.provider.clone(),
         hint: String::new(),
     })?;
-    let args = provider.start_args(entry, &cfg.host, cfg.port)?;
+    // Resolved weights (GGUF downloads) override the repo id at launch.
+    let mut launch_entry = entry.clone();
+    if ensure && entry.provider == "llama-cpp" {
+        match provider.fetch_weights(entry).await {
+            Ok(Some(path)) => {
+                launch_entry.repo = path.to_string_lossy().to_string();
+            }
+            Ok(None) => {}
+            Err(e) => {
+                return Err(ModeldeskError::Incompatible {
+                    repo: entry.repo.clone(),
+                    provider: entry.provider.clone(),
+                    reason: format!("weight fetch failed: {e:#}"),
+                }
+                .into());
+            }
+        }
+    }
+    let args = provider.start_args(&launch_entry, &cfg.host, cfg.port)?;
 
     let log_path = platform::log_path();
     if let Some(parent) = log_path.parent() {
@@ -248,4 +281,74 @@ pub fn tail_log(lines: usize) -> Result<String> {
     let all: Vec<&str> = raw.lines().collect();
     let start = all.len().saturating_sub(lines);
     Ok(all[start..].join("\n"))
+}
+
+/// Ensure the backend is installed, new enough, and (for GGUF) has weights.
+/// Installs automatically unless `--no-install` / `MODELDESK_NO_INSTALL=1`.
+pub async fn ensure_runtime(
+    provider: &dyn providers::Provider,
+    entry: &ModelEntry,
+) -> Result<()> {
+    use crate::runtime_env::Env;
+    use crate::runtime_install as ri;
+
+    let env = Env::detect();
+    ri::ensure_arch_ok(provider.id(), &env)?;
+
+    let installed = provider.binary().is_ok();
+    if !installed {
+        if ri::no_install_mode() {
+            return Err(ModeldeskError::ProviderMissing {
+                provider: provider.id().to_string(),
+                hint: String::new(),
+            }
+            .into());
+        }
+        let plan = ri::plan(provider.id(), &env)?;
+        println!(
+            "{} backend '{}' missing — installing via {}…",
+            crate::output::cyan("●"),
+            provider.id(),
+            plan.steps
+                .iter()
+                .map(|s| s.describe())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        ri::run_plan(&plan)?;
+    }
+
+    match provider.installed_version() {
+        Ok(Some(v)) => {
+            if let Some(min) = provider.min_version() {
+                if !providers::version_meets(&v, min) {
+                    eprintln!(
+                        "{} backend '{}' is {v}, want ≥ {}.{}.{}. Continuing anyway — upgrade when you can.",
+                        crate::output::warn("old"),
+                        provider.id(),
+                        min.0,
+                        min.1,
+                        min.2
+                    );
+                }
+            }
+        }
+        Ok(None) => {
+            eprintln!(
+                "{}",
+                crate::output::dim(&format!(
+                    "could not determine {} version — continuing",
+                    provider.id()
+                ))
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "{}",
+                crate::output::dim(&format!("version probe failed: {e:#}"))
+            );
+        }
+    }
+    let _ = entry;
+    Ok(())
 }

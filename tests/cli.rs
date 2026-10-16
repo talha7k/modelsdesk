@@ -160,3 +160,22 @@ fn profile_add_duplicate_needs_overwrite() {
     third.args(&args).arg("--overwrite");
     assert!(third.output().unwrap().status.success());
 }
+
+#[test]
+fn outdated_command_lists_backends() {
+    let dir = isolated_home();
+    let mut cmd = cmd_with_home(&dir);
+    cmd.args(["outdated", "--json"]).timeout(std::time::Duration::from_secs(120));
+    let out = cmd.output().unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(v.get("backends").is_some());
+    assert!(v.get("models").is_some());
+}
+
+#[test]
+fn version_compare_orders_correctly() {
+    assert!(modeldesk::providers::version_meets("0.20.3", (0, 17, 0)));
+    assert!(!modeldesk::providers::version_meets("0.16.9", (0, 17, 0)));
+    assert!(modeldesk::providers::version_meets("1.0.0", (0, 99, 99)));
+}

@@ -77,21 +77,7 @@ pub fn total_memory_gb() -> f64 {
 
 pub fn estimate_need_gb(entry: &ModelEntry) -> f64 {
     let lower = entry.repo.to_lowercase();
-    let params_b: f64 = if lower.contains("27b") || lower.contains("30b") || lower.contains("32b") {
-        27.0
-    } else if lower.contains("14b") || lower.contains("12b") {
-        13.0
-    } else if lower.contains("9b") || lower.contains("8b") {
-        8.0
-    } else if lower.contains("4b") {
-        4.0
-    } else if lower.contains("2.6b") || lower.contains("3b") {
-        2.6
-    } else if lower.contains("1.2b") || lower.contains("1b") {
-        1.2
-    } else {
-        8.0
-    };
+    let params_b: f64 = parse_params_b(&lower).unwrap_or(8.0);
     let bytes_per_param =
         if lower.contains("4bit") || lower.contains("4-bit") || lower.contains("q4") {
             0.55
@@ -104,6 +90,39 @@ pub fn estimate_need_gb(entry: &ModelEntry) -> f64 {
         };
     let drafter_gb = entry.drafter.as_ref().map(|_| 1.5).unwrap_or(0.0);
     params_b * bytes_per_param + 1.5 + drafter_gb
+}
+
+fn parse_params_b(lower: &str) -> Option<f64> {
+    // Match "<num>b" tokens with boundaries so "8bit"/"q4" never false-positive.
+    // Scans for digits (with optional decimal) immediately followed by 'b'
+    // where the char after 'b' is not alphanumeric.
+    let bytes = lower.as_bytes();
+    let mut i = 0;
+    let mut best: Option<f64> = None;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_digit() {
+            let start = i;
+            while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+                i += 1;
+            }
+            if i < bytes.len() && bytes[i] == b'b' {
+                let after = i + 1;
+                let boundary = after >= bytes.len() || !bytes[after].is_ascii_alphanumeric();
+                if boundary {
+                    if let Ok(v) = lower[start..i].parse::<f64>() {
+                        // Largest wins: skips MoE active-param suffixes
+                        // ("8B-A1B" → 8, not 1).
+                        if best.is_none_or(|b| v > b) {
+                            best = Some(v);
+                        }
+                    }
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    best
 }
 
 pub fn port_holder(port: u16) -> Option<String> {

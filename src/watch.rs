@@ -9,7 +9,11 @@ use crate::providers::{self, ServerStatus};
 use crate::server::{self};
 
 pub async fn animated_boot(cfg: &Config) -> Result<()> {
+    let tty = console::Term::stdout().is_term();
     let mp = MultiProgress::new();
+    if !tty {
+        mp.set_draw_target(indicatif::ProgressDrawTarget::hidden());
+    }
     let sty = ProgressStyle::with_template("{spinner:.green} {msg}")?;
     let steps = [
         "resolving active model",
@@ -23,16 +27,26 @@ pub async fn animated_boot(cfg: &Config) -> Result<()> {
         let pb = mp.add(ProgressBar::new_spinner());
         pb.set_style(sty.clone());
         pb.set_message(step.to_string());
-        pb.enable_steady_tick(Duration::from_millis(80));
+        if tty {
+            pb.enable_steady_tick(Duration::from_millis(80));
+        }
         bars.push(pb);
     }
+    let finish = |bar: &ProgressBar, msg: String| {
+        if tty {
+            bar.finish_with_message(msg.clone());
+        } else {
+            bar.finish_and_clear();
+            println!("{msg}");
+        }
+    };
     let entry = cfg.active_entry()?;
-    bars[0].finish_with_message(output::ok("active model resolved"));
+    finish(&bars[0], output::ok("active model resolved"));
     let provider = providers::for_entry(&entry);
     provider.binary()?;
-    bars[1].finish_with_message(output::ok("provider binary found"));
+    finish(&bars[1], output::ok("provider binary found"));
     server::start(cfg, &entry, false).await?;
-    bars[2].finish_with_message(output::ok("server process launched"));
+    finish(&bars[2], output::ok("server process launched"));
     let client = server::http_client();
     let mut healthy = None;
     for _ in 0..40 {
@@ -47,14 +61,20 @@ pub async fn animated_boot(cfg: &Config) -> Result<()> {
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    bars[3].finish_with_message(output::ok("port listening"));
+    finish(&bars[3], output::ok("port listening"));
     match healthy {
-        Some(rep) => bars[4].finish_with_message(output::ok(&format!(
-            "healthy — {} ({})",
-            rep.model.as_deref().unwrap_or("?"),
-            rep.mode.as_deref().unwrap_or("?")
-        ))),
-        None => bars[4].finish_with_message(output::warn("up but health not ok yet — see logs")),
+        Some(rep) => finish(
+            &bars[4],
+            output::ok(&format!(
+                "healthy — {} ({})",
+                rep.model.as_deref().unwrap_or("?"),
+                rep.mode.as_deref().unwrap_or("?")
+            )),
+        ),
+        None => finish(
+            &bars[4],
+            output::warn("up but health not ok yet — see logs"),
+        ),
     }
     Ok(())
 }

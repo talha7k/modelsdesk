@@ -25,6 +25,51 @@ fn cmd_line(proc_: &sysinfo::Process) -> String {
         .join(" ")
 }
 
+fn is_provider_cmd(cmd: &str) -> bool {
+    cmd.contains("mlx-dspark")
+        || cmd.contains("mlx_lm.server")
+        || cmd.contains("llama-server")
+        || cmd.contains("ollama")
+}
+
+/// Pids listening on a port via lsof (sysinfo misses hardened macOS processes).
+#[cfg(unix)]
+pub fn port_pids(port: u16) -> Vec<u32> {
+    std::process::Command::new("lsof")
+        .args(["-ti", &format!(":{port}")])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| {
+            s.split_whitespace()
+                .filter_map(|p| p.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(windows)]
+pub fn port_pids(_port: u16) -> Vec<u32> {
+    Vec::new()
+}
+
+/// Full command line for a pid via ps (sees what sysinfo misses).
+#[cfg(unix)]
+fn pid_cmdline(pid: u32) -> Option<String> {
+    std::process::Command::new("ps")
+        .args(["-o", "command=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+#[cfg(windows)]
+fn pid_cmdline(_pid: u32) -> Option<String> {
+    None
+}
+
 fn refresh(sys: &mut System) {
     sys.refresh_processes(ProcessesToUpdate::All, true);
 }
@@ -32,26 +77,25 @@ fn refresh(sys: &mut System) {
 pub fn server_status(cfg: &Config) -> ServerStatus {
     let mut sys = System::new();
     refresh(&mut sys);
-    let marker = format!("modeldesk-{}", cfg.port);
-    for (_, proc_) in sys.processes() {
+    for (pid, proc_) in sys.processes() {
         let cmd = cmd_line(proc_);
-        let has_marker = cmd.contains(&marker);
-        let is_provider = cmd.contains("mlx-dspark")
-            || cmd.contains("mlx_lm.server")
-            || cmd.contains("llama-server")
-            || cmd.contains("ollama");
-        if has_marker || (is_provider && cmd.contains(&cfg.port.to_string())) {
+        if is_provider_cmd(&cmd) && cmd.contains(&cfg.port.to_string()) {
             return ServerStatus::Running {
-                pid: proc_.pid().as_u32(),
+                pid: pid.as_u32(),
                 port: cfg.port,
             };
         }
     }
+    // sysinfo misses hardened macOS processes — resolve via lsof + ps.
+    for pid in port_pids(cfg.port) {
+        if let Some(cmd) = pid_cmdline(pid) {
+            if is_provider_cmd(&cmd) {
+                return ServerStatus::Running { pid, port: cfg.port };
+            }
+        }
+    }
     if port_listening(cfg.port) {
-        return ServerStatus::Running {
-            pid: 0,
-            port: cfg.port,
-        };
+        return ServerStatus::Running { pid: 0, port: cfg.port };
     }
     ServerStatus::Stopped
 }
@@ -66,10 +110,6 @@ fn port_listening(port: u16) -> bool {
 fn port_listening(port: u16) -> bool {
     use std::net::TcpListener;
     TcpListener::bind(format!("127.0.0.1:{port}")).is_err()
-}
-
-fn marker_arg(cfg: &Config) -> String {
-    format!("modeldesk-{}", cfg.port)
 }
 
 pub async fn start(cfg: &Config, entry: &ModelEntry, foreground: bool) -> Result<()> {
@@ -141,38 +181,31 @@ pub async fn start(cfg: &Config, entry: &ModelEntry, foreground: bool) -> Result
 }
 
 pub async fn stop(cfg: &Config) -> Result<bool> {
-    let owned_pid: Option<u32> = fs::read_to_string(platform::state_path())
-        .ok()
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|v| v.get("pid").and_then(|p| p.as_u64()).map(|p| p as u32));
+    // A backend binary on OUR port is ours — regardless of who launched it.
+    // A foreign process (Expo, another tool) can never match: it neither runs
+    // a provider binary nor serves our API on our port.
     let mut sys = System::new();
     refresh(&mut sys);
-    let marker = marker_arg(cfg);
+    let port_str = cfg.port.to_string();
     let mut killed = false;
-    let mut foreign: Vec<String> = Vec::new();
-    for (pid, proc_) in sys.processes() {
+    for (_, proc_) in sys.processes() {
         let cmd = cmd_line(proc_);
-        let is_provider = cmd.contains("mlx-dspark")
-            || cmd.contains("mlx_lm.server")
-            || cmd.contains("llama-server")
-            || cmd.contains("ollama");
-        if !(is_provider && cmd.contains(&cfg.port.to_string())) {
-            continue;
+        if is_provider_cmd(&cmd) && cmd.contains(&port_str) && proc_.kill() {
+            killed = true;
         }
-        let owned = owned_pid == Some(pid.as_u32()) || cmd.contains(&marker);
-        if owned {
-            if proc_.kill() {
-                killed = true;
-            }
-        } else {
-            foreign.push(format!("{} (pid {})", proc_.name().to_string_lossy(), pid));
+    }
+    // sysinfo misses hardened macOS processes — fall back to kill by pid.
+    for pid in port_pids(cfg.port) {
+        let cmd = pid_cmdline(pid).unwrap_or_default();
+        if is_provider_cmd(&cmd) {
+            killed = libc_kill(pid) || killed;
         }
     }
     let state_path = platform::state_path();
     if state_path.exists() {
         let _ = fs::remove_file(&state_path);
     }
-    for _ in 0..10 {
+    for _ in 0..15 {
         if matches!(server_status(cfg), ServerStatus::Stopped) {
             break;
         }
@@ -181,11 +214,8 @@ pub async fn stop(cfg: &Config) -> Result<bool> {
     match server_status(cfg) {
         ServerStatus::Stopped => Ok(killed),
         ServerStatus::Running { .. } => {
-            let holder = if foreign.is_empty() {
-                compat::port_holder(cfg.port).unwrap_or_else(|| "another process".to_string())
-            } else {
-                foreign.join(", ")
-            };
+            let holder =
+                compat::port_holder(cfg.port).unwrap_or_else(|| "another process".to_string());
             Err(ModeldeskError::PortBusy {
                 port: cfg.port,
                 holder,
@@ -193,6 +223,20 @@ pub async fn stop(cfg: &Config) -> Result<bool> {
             .into())
         }
     }
+}
+
+#[cfg(unix)]
+fn libc_kill(pid: u32) -> bool {
+    // SIGTERM, no libc crate needed.
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    unsafe { kill(pid as i32, 15) == 0 }
+}
+
+#[cfg(windows)]
+fn libc_kill(_pid: u32) -> bool {
+    false
 }
 
 pub fn tail_log(lines: usize) -> Result<String> {

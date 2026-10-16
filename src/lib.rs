@@ -3,6 +3,7 @@ pub mod compat;
 pub mod config;
 pub mod error;
 pub mod health;
+pub mod hub;
 pub mod models;
 pub mod output;
 pub mod platform;

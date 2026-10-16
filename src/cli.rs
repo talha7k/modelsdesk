@@ -34,7 +34,7 @@ pub struct Cli {
         long,
         global = true,
         help = "Emit machine-readable JSON where supported",
-        long_help = "Emit machine-readable JSON instead of human output.\nSupported by: health, models, providers, use, doctor."
+        long_help = "Emit machine-readable JSON instead of human output.\nSupported by: health, models, providers, use, doctor, search, setup."
     )]
     pub json: bool,
     #[arg(
@@ -148,6 +148,47 @@ pub enum Commands {
     Pull {
         #[arg(help = "Profile name to fetch (default: active profile)")]
         name: Option<String>,
+    },
+    #[command(
+        about = "Search HuggingFace for runnable models",
+        long_about = "Query huggingface.co for text-generation models, then annotate\n\
+            each hit: detected weight format, recommended backend, whether the\n\
+            backend is installed, RAM estimate vs this machine, and whether\n\
+            the weights are already cached. Sorted by downloads.",
+        after_help = "EXAMPLES:\n    \
+            modeldesk search qwen3 8b\n    \
+            modeldesk search LiquidAI LFM --limit 20\n    \
+            modeldesk search mistral --json | jq '.[].repo'"
+    )]
+    Search {
+        #[arg(help = "Search terms")]
+        query: Vec<String>,
+        #[arg(long, default_value_t = 15, help = "Max results (default 15)")]
+        limit: usize,
+    },
+    #[command(
+        about = "Set up a model end-to-end (find → validate → download → profile)",
+        long_about = "One command from repo id to ready-to-serve: verify the repo\n\
+            exists on HuggingFace, recommend (or take) the backend, run the\n\
+            full doctor validation, download weights (ollama pull, or first\n\
+            start for the rest), save the profile, and optionally start\n\
+            serving immediately.",
+        after_help = "EXAMPLES:\n    \
+            modeldesk setup mlx-community/Qwen3-8B-8bit\n    \
+            modeldesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start\n    \
+            modeldesk setup ./models/mistral-7b.Q4_K_M.gguf --provider llama-cpp --start"
+    )]
+    Setup {
+        #[arg(help = "Repo id, GGUF path, or ollama name")]
+        repo: String,
+        #[arg(long, help = "Profile short name (default: last repo segment)")]
+        name: Option<String>,
+        #[arg(long, help = "Provider backend (default: recommended for format)")]
+        provider: Option<String>,
+        #[arg(long, help = "DSpark/EAGLE drafter repo (mlx-dspark only)")]
+        drafter: Option<String>,
+        #[arg(long, help = "Start serving immediately after setup")]
+        start: bool,
     },
     #[command(
         about = "Validate the active model against provider + machine",

@@ -10,7 +10,7 @@ use modeldesk::compat;
 use modeldesk::config::{Config, ModelEntry};
 use modeldesk::error::ModeldeskError;
 use modeldesk::providers::ServerStatus;
-use modeldesk::{models, output, platform, providers, server, watch};
+use modeldesk::{hub, models, output, platform, providers, server, watch};
 
 fn main() {
     if let Err(e) = run() {
@@ -60,12 +60,23 @@ async fn run() -> Result<()> {
             match server::server_status(&cfg) {
                 ServerStatus::Stopped => println!("{}", output::dim("already stopped")),
                 ServerStatus::Running { pid, port } => {
+                    let tty = console::Term::stdout().is_term();
                     let pb = ProgressBar::new_spinner();
-                    pb.set_style(ProgressStyle::with_template("{spinner:.red} {msg}")?);
-                    pb.set_message(format!("stopping pid {pid} on :{port}"));
-                    pb.enable_steady_tick(Duration::from_millis(80));
+                    if tty {
+                        pb.set_style(ProgressStyle::with_template("{spinner:.red} {msg}")?);
+                        pb.set_message(format!("stopping pid {pid} on :{port}"));
+                        pb.enable_steady_tick(Duration::from_millis(80));
+                    } else {
+                        pb.set_draw_target(indicatif::ProgressDrawTarget::hidden());
+                        println!("stopping pid {pid} on :{port}…");
+                    }
                     server::stop(&cfg).await?;
-                    pb.finish_with_message(output::ok(&format!("port :{port} free")));
+                    let done = output::ok(&format!("port :{port} free"));
+                    if tty {
+                        pb.finish_with_message(done);
+                    } else {
+                        println!("{done}");
+                    }
                 }
             }
         }
@@ -98,6 +109,28 @@ async fn run() -> Result<()> {
         Commands::Pull { name } => {
             let cfg = Config::load()?;
             run_pull(&cfg, name.as_deref(), cli.json)?;
+        }
+        Commands::Search { query, limit } => {
+            run_search(&query.join(" "), limit, cli.json).await?;
+        }
+        Commands::Setup {
+            repo,
+            name,
+            provider,
+            drafter,
+            start,
+        } => {
+            let mut cfg = Config::load()?;
+            run_setup(
+                &mut cfg,
+                &repo,
+                name.as_deref(),
+                provider.as_deref(),
+                drafter.as_deref(),
+                start,
+                cli.json,
+            )
+            .await?;
         }
         Commands::Doctor { name } => {
             let cfg = Config::load()?;
@@ -392,17 +425,31 @@ async fn run_use(
     }
     let client = server::http_client();
     let provider = providers::for_entry(&entry);
+    let tty = console::Term::stdout().is_term();
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::with_template("{spinner:.green} {msg}")?);
-    pb.set_message(format!("hot-swapping to {}", entry.repo));
-    pb.enable_steady_tick(Duration::from_millis(80));
+    if tty {
+        pb.set_style(ProgressStyle::with_template("{spinner:.green} {msg}")?);
+        pb.set_message(format!("hot-swapping to {}", entry.repo));
+        pb.enable_steady_tick(Duration::from_millis(80));
+    } else {
+        pb.set_draw_target(indicatif::ProgressDrawTarget::hidden());
+        println!("hot-swapping to {}…", entry.repo);
+    }
+    let done = |msg: String| {
+        if tty {
+            pb.finish_with_message(msg.clone());
+        } else {
+            pb.finish_and_clear();
+            println!("{msg}");
+        }
+    };
     match provider
         .admin_load(&client, &cfg.host, cfg.port, &entry)
         .await
     {
-        Ok(true) => pb.finish_with_message(output::ok(&format!("now serving {}", entry.repo))),
+        Ok(true) => done(output::ok(&format!("now serving {}", entry.repo))),
         _ => {
-            pb.finish_with_message(output::warn("hot-swap unsupported — restarting"));
+            done(output::warn("hot-swap unsupported — restarting"));
             server::stop(cfg).await?;
             watch::animated_boot(cfg).await?;
         }
@@ -786,6 +833,155 @@ fn run_profile(cfg: &mut Config, command: ProfileCommands, json: bool) -> Result
         }
     }
     Ok(())
+}
+
+async fn run_search(query: &str, limit: usize, json: bool) -> Result<()> {
+    if query.trim().is_empty() {
+        anyhow::bail!("give a search query: `modeldesk search qwen3 8b`");
+    }
+    let tty = console::Term::stdout().is_term();
+    let pb = ProgressBar::new_spinner();
+    if tty {
+        pb.set_style(ProgressStyle::with_template("{spinner:.green} {msg}")?);
+        pb.set_message(format!("searching huggingface for '{query}'"));
+        pb.enable_steady_tick(Duration::from_millis(80));
+    }
+    let hits = hub::search(query, limit).await?;
+    if tty {
+        pb.finish_and_clear();
+    }
+    let enriched = hub::enrich(hits);
+    hub::print_hits(&enriched, json)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_setup(
+    cfg: &mut Config,
+    repo: &str,
+    name: Option<&str>,
+    provider_override: Option<&str>,
+    drafter: Option<&str>,
+    start: bool,
+    json: bool,
+) -> Result<()> {
+    let is_local_path = repo.starts_with('.') || repo.starts_with('/') || repo.starts_with('~');
+    let format = compat::detect_format(repo);
+    let backend = provider_override
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| hub::recommend_provider(format).to_string());
+    if !providers::all().iter().any(|p| p.id() == backend) {
+        return Err(ModeldeskError::UnknownProvider { id: backend }.into());
+    }
+    let short = name
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            repo.trim_end_matches('/')
+                .split('/')
+                .next_back()
+                .unwrap_or(repo)
+                .to_string()
+        });
+
+    if !is_local_path && !repo.contains('/') {
+        // Bare ollama-style name: no HF repo to verify, backend must be ollama.
+        if backend != "ollama" {
+            anyhow::bail!(
+                "'{repo}' looks like an ollama model name — pass --provider ollama or use a full HF repo id"
+            );
+        }
+    } else if !is_local_path {
+        println!("{} verifying {repo} on huggingface…", output::dim("→"));
+        let files = hub::repo_files(repo).await?;
+        let has_weights = files.iter().any(|f| {
+            f.ends_with(".safetensors")
+                || f.ends_with(".safetensors.index.json")
+                || f.ends_with(".gguf")
+        });
+        if !has_weights {
+            anyhow::bail!("repo '{repo}' has no weight files (.safetensors/.gguf) — wrong repo?");
+        }
+        println!(
+            "{}",
+            output::dim(&format!("repo ok ({} files)", files.len()))
+        );
+    } else {
+        let expanded = shellexpand(repo);
+        if !std::path::Path::new(&expanded).exists() {
+            anyhow::bail!("local path '{repo}' does not exist");
+        }
+    }
+
+    if backend == "mlx-dspark" && drafter.is_none() && format == compat::ModelFormat::MlX {
+        println!(
+            "{}",
+            output::dim("tip: add --drafter <repo> for speculative-decoding speedup (optional)")
+        );
+    }
+
+    let candidate = ModelEntry {
+        name: short.clone(),
+        provider: backend.clone(),
+        repo: repo.to_string(),
+        drafter: drafter.map(|s| s.to_string()),
+        kv_bits: 4,
+        context_window: None,
+        default_temperature: None,
+        mode: None,
+    };
+    compat::check(&candidate, cfg.port).map_err(|e| {
+        anyhow::anyhow!("'{repo}' rejected: {e:#}")
+    })?;
+
+    if cfg.resolve(&short).is_some() {
+        cfg.models.retain(|m| m.name != short);
+        println!("{}", output::dim(&format!("replacing existing profile '{short}'")));
+    }
+    cfg.models.push(candidate);
+    cfg.active = Some(short.clone());
+    cfg.save()?;
+    println!(
+        "{} profile '{short}' saved [{backend}] ({repo})",
+        output::ok("setup")
+    );
+
+    if backend == "ollama" && !hub::is_cached(repo) {
+        println!("{} pulling {repo}…", output::dim("→"));
+        run_pull(cfg, Some(&short), false)?;
+    } else if !hub::is_cached(repo) && !is_local_path {
+        println!(
+            "{}",
+            output::dim("weights download on first `modeldesk start` (or `modeldesk pull`)")
+        );
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "active": short, "provider": backend, "repo": repo,
+            }))?
+        );
+    }
+    if start {
+        println!("{} starting {short}…", output::dim("→"));
+        watch::animated_boot(cfg).await?;
+    } else {
+        println!(
+            "{}",
+            output::dim(&format!("`modeldesk use {short}` to switch, `modeldesk start` to serve"))
+        );
+    }
+    Ok(())
+}
+
+fn shellexpand(p: &str) -> String {
+    if let Some(rest) = p.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest).to_string_lossy().to_string();
+        }
+    }
+    p.to_string()
 }
 
 fn hint_for(e: &anyhow::Error) -> Option<String> {

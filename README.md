@@ -33,11 +33,25 @@ modeldesk watch       # live console (q to quit)
 | `use <name> [--provider ID] [--restart]` | Switch profile; hot-swap same-backend, restart on provider change |
 | `providers` | Backend binaries, platforms, install hints |
 | `pull [name]` | Pre-fetch weights (`ollama pull`; others download on first start) |
+| `search <terms> [--limit N]` | Search HuggingFace: format, backend, fit, cached status per hit |
+| `setup <repo> [--name N] [--provider ID] [--drafter R] [--start]` | Verify → validate → download → profile, optionally serve |
 | `doctor [name]` | provider / format / arch / RAM / port checks |
 | `profile <list\|show\|add\|remove>` | Stored model configs (validated before save) |
 | `logs [n] [--follow]` | Server log tail |
 | `watch` | Full-screen live console |
 | `completions <shell>` | Shell completions |
+
+## Finding models
+
+```bash
+modeldesk search qwen3 8b --limit 10
+modeldesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start
+```
+
+`search` annotates every HF hit with detected format, recommended backend,
+install status, RAM estimate, and cached state. `setup` runs the full chain:
+repo verification → backend check (with install hint if missing) → doctor →
+download → saved profile → optional serve.
 
 ## Profiles
 

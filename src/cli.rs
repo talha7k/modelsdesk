@@ -191,6 +191,17 @@ pub enum Commands {
         start: bool,
     },
     #[command(
+        about = "Sync OpenCode/jcode configs to the active model",
+        long_about = "Rewrite the local-model entries in OpenCode's opencode.json\n\
+            and jcode's config.toml to point at modeldesk's active profile\n\
+            (same port, current model id + context window). Run after every\n\
+            `use`/`setup` so switching models never breaks the agents.",
+        after_help = "EXAMPLES:\n    \
+            modeldesk sync-agents\n    \
+            modeldesk use qwen3-8b && modeldesk sync-agents"
+    )]
+    SyncAgents,
+    #[command(
         about = "Validate the active model against provider + machine",
         long_about = "Pre-flight check without starting anything: provider\n\
             installed, weight format compatible, architecture supported\n\

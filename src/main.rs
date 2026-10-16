@@ -10,7 +10,7 @@ use modeldesk::compat;
 use modeldesk::config::{Config, ModelEntry};
 use modeldesk::error::ModeldeskError;
 use modeldesk::providers::ServerStatus;
-use modeldesk::{hub, models, output, platform, providers, server, watch};
+use modeldesk::{agents, hub, models, output, platform, providers, server, watch};
 
 fn main() {
     if let Err(e) = run() {
@@ -135,6 +135,10 @@ async fn run() -> Result<()> {
         Commands::Doctor { name } => {
             let cfg = Config::load()?;
             run_doctor(&cfg, name.as_deref(), cli.json)?;
+        }
+        Commands::SyncAgents => {
+            let cfg = Config::load()?;
+            agents::sync(&cfg, false, cli.json)?;
         }
         Commands::Profile { command } => {
             let mut cfg = Config::load()?;
@@ -452,6 +456,11 @@ async fn run_use(
             done(output::warn("hot-swap unsupported — restarting"));
             server::stop(cfg).await?;
             watch::animated_boot(cfg).await?;
+        }
+    }
+    if !json {
+        if let Err(e) = agents::sync(cfg, true, false) {
+            println!("{} agent sync skipped: {e:#}", output::dim("→"));
         }
     }
     Ok(())

@@ -3,7 +3,10 @@ name = "modeldesk"
 version = "0.1.0"
 edition = "2021"
 description = "Local LLM model manager for Mac (provider-agnostic core, macOS first)"
-license = "MIT"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/talha7k/modeldesk"
+homepage = "https://github.com/talha7k/modeldesk"
+documentation = "https://github.com/talha7k/modeldesk/blob/main/README.md"
 
 [[bin]]
 name = "modeldesk"

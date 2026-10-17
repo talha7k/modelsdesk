@@ -14,3 +14,7 @@
 /npm/platforms/*/bin/
 /npm/*.tgz
 .worktrees/
+
+# npm publish auth (varlock-injected, never committed)
+/npm/.npmrc
+/npm/skills/

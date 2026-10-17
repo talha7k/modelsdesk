@@ -5,12 +5,12 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::io::BufRead;
 use std::time::Duration;
 
-use modeldesk::cli::{Cli, Commands, ProfileCommands};
-use modeldesk::compat;
-use modeldesk::config::{Config, ModelEntry};
-use modeldesk::error::ModeldeskError;
-use modeldesk::providers::ServerStatus;
-use modeldesk::{agents, freshness, hub, models, output, platform, providers, server, watch};
+use modelsdesk::cli::{Cli, Commands, ProfileCommands};
+use modelsdesk::compat;
+use modelsdesk::config::{Config, ModelEntry};
+use modelsdesk::error::ModeldeskError;
+use modelsdesk::providers::ServerStatus;
+use modelsdesk::{agents, freshness, hub, models, output, platform, providers, server, watch};
 
 fn main() {
     if let Err(e) = run() {
@@ -39,7 +39,7 @@ async fn run() -> Result<()> {
         eprintln!(
             "{}",
             output::warn(&format!(
-                "modeldesk targets macOS first; running on {} (provider-agnostic core, YMMV)",
+                "modelsdesk targets macOS first; running on {} (provider-agnostic core, YMMV)",
                 platform::os_label()
             ))
         );
@@ -207,31 +207,31 @@ async fn run() -> Result<()> {
                 "bash" => generate(
                     clap_complete::shells::Bash,
                     &mut cmd,
-                    "modeldesk",
+                    "modelsdesk",
                     &mut std::io::stdout(),
                 ),
                 "zsh" => generate(
                     clap_complete::shells::Zsh,
                     &mut cmd,
-                    "modeldesk",
+                    "modelsdesk",
                     &mut std::io::stdout(),
                 ),
                 "fish" => generate(
                     clap_complete::shells::Fish,
                     &mut cmd,
-                    "modeldesk",
+                    "modelsdesk",
                     &mut std::io::stdout(),
                 ),
                 "powershell" => generate(
                     clap_complete::shells::PowerShell,
                     &mut cmd,
-                    "modeldesk",
+                    "modelsdesk",
                     &mut std::io::stdout(),
                 ),
                 "elvish" => generate(
                     clap_complete::shells::Elvish,
                     &mut cmd,
-                    "modeldesk",
+                    "modelsdesk",
                     &mut std::io::stdout(),
                 ),
                 _ => anyhow::bail!("unknown shell '{shell}' (bash, zsh, fish, powershell, elvish)"),
@@ -372,7 +372,7 @@ async fn run_use(
     if let Some(want) = provider_override {
         let valid = providers::all().iter().any(|p| p.id() == want);
         if !valid {
-            anyhow::bail!("unknown provider '{want}' (see `modeldesk providers`)",);
+            anyhow::bail!("unknown provider '{want}' (see `modelsdesk providers`)",);
         }
     }
     let previous = cfg.active_entry().ok();
@@ -398,7 +398,7 @@ async fn run_use(
             }
         });
         let short = repo.split('/').next_back().unwrap_or(&repo).to_string();
-        cfg.models.push(modeldesk::config::ModelEntry {
+        cfg.models.push(modelsdesk::config::ModelEntry {
             name: short.clone(),
             provider: provider.to_string(),
             repo: repo.clone(),
@@ -433,7 +433,7 @@ async fn run_use(
     if !running {
         println!(
             "{}",
-            output::dim("server stopped — `modeldesk start` to load it")
+            output::dim("server stopped — `modelsdesk start` to load it")
         );
         return Ok(());
     }
@@ -499,7 +499,7 @@ async fn run_use(
 }
 
 fn run_providers(json: bool) {
-    use modeldesk::runtime_env::Env;
+    use modelsdesk::runtime_env::Env;
     let env = Env::detect();
     let rows: Vec<serde_json::Value> = providers::all()
         .iter()
@@ -599,7 +599,7 @@ fn run_providers(json: bool) {
     }
     println!(
         "\n{}",
-        output::dim("set per model: `modeldesk use <name> --provider <id>`")
+        output::dim("set per model: `modelsdesk use <name> --provider <id>`")
     );
 }
 
@@ -638,7 +638,7 @@ fn run_pull(cfg: &Config, name: Option<&str>, json: bool) -> Result<()> {
     if entry.provider != "ollama" {
         println!(
             "{}",
-            output::dim("this backend fetches weights on first start — nothing to pre-pull; `modeldesk start` will download with progress")
+            output::dim("this backend fetches weights on first start — nothing to pre-pull; `modelsdesk start` will download with progress")
         );
         return Ok(());
     }
@@ -696,11 +696,11 @@ fn run_doctor(cfg: &Config, name: Option<&str>, fix: bool, json: bool) -> Result
             }));
         }
         Err(_) => {
-            if fix && !modeldesk::runtime_install::no_install_mode() {
-                use modeldesk::runtime_env::Env;
+            if fix && !modelsdesk::runtime_install::no_install_mode() {
+                use modelsdesk::runtime_env::Env;
                 let env = Env::detect();
-                match modeldesk::runtime_install::plan(provider.id(), &env)
-                    .and_then(|p| modeldesk::runtime_install::run_plan(&p).map(|_| p))
+                match modelsdesk::runtime_install::plan(provider.id(), &env)
+                    .and_then(|p| modelsdesk::runtime_install::run_plan(&p).map(|_| p))
                 {
                     Ok(_) => {
                         checks.push(serde_json::json!({
@@ -779,7 +779,7 @@ fn run_doctor(cfg: &Config, name: Option<&str>, fix: bool, json: bool) -> Result
         ServerStatus::Running { pid, .. } => {
             let detail = if pid == 0 {
                 let holder = compat::port_holder(cfg.port).unwrap_or_else(|| "another process".to_string());
-                format!(":{} held by {holder} (modeldesk did not start it — stop it first or hot-swap will fail)", cfg.port)
+                format!(":{} held by {holder} (modelsdesk did not start it — stop it first or hot-swap will fail)", cfg.port)
             } else {
                 format!(":{port} held by pid {pid} (hot-swap or restart will reuse it)", port = cfg.port)
             };
@@ -958,7 +958,7 @@ fn run_profile(cfg: &mut Config, command: ProfileCommands, json: bool) -> Result
 
 async fn run_search(query: &str, limit: usize, json: bool) -> Result<()> {
     if query.trim().is_empty() {
-        anyhow::bail!("give a search query: `modeldesk search qwen3 8b`");
+        anyhow::bail!("give a search query: `modelsdesk search qwen3 8b`");
     }
     let tty = console::Term::stdout().is_term();
     let pb = ProgressBar::new_spinner();
@@ -1072,7 +1072,7 @@ async fn run_setup(
     } else if !hub::is_cached(repo) && !is_local_path {
         println!(
             "{}",
-            output::dim("weights download on first `modeldesk start` (or `modeldesk pull`)")
+            output::dim("weights download on first `modelsdesk start` (or `modelsdesk pull`)")
         );
     }
 
@@ -1090,7 +1090,7 @@ async fn run_setup(
     } else {
         println!(
             "{}",
-            output::dim(&format!("`modeldesk use {short}` to switch, `modeldesk start` to serve"))
+            output::dim(&format!("`modelsdesk use {short}` to switch, `modelsdesk start` to serve"))
         );
     }
     Ok(())

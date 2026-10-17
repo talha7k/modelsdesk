@@ -1,19 +1,19 @@
 [package]
-name = "modeldesk"
+name = "modelsdesk"
 version = "0.1.0"
 edition = "2021"
 description = "Local LLM model manager for Mac (provider-agnostic core, macOS first)"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/talha7k/modeldesk"
-homepage = "https://github.com/talha7k/modeldesk"
-documentation = "https://github.com/talha7k/modeldesk/blob/main/README.md"
+repository = "https://github.com/talha7k/modelsdesk"
+homepage = "https://github.com/talha7k/modelsdesk"
+documentation = "https://github.com/talha7k/modelsdesk/blob/main/README.md"
 
 [[bin]]
-name = "modeldesk"
+name = "modelsd"
 path = "src/main.rs"
 
 [lib]
-name = "modeldesk"
+name = "modelsdesk"
 path = "src/lib.rs"
 
 [dependencies]

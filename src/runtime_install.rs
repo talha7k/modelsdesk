@@ -47,7 +47,7 @@ pub fn plan(backend: &str, env: &Env) -> Result<InstallPlan> {
     Ok(InstallPlan {
         backend: backend.to_string(),
         steps,
-        verify_hint: format!("modeldesk providers"),
+        verify_hint: format!("modelsdesk providers"),
     })
 }
 
@@ -297,7 +297,7 @@ pub fn gguf_cache_path(repo: &str, file: Option<&str>) -> PathBuf {
     let slug = repo.replace('/', "--");
     let base = crate::platform::home()
         .join(".cache")
-        .join("modeldesk")
+        .join("modelsdesk")
         .join("gguf")
         .join(slug);
     match file {

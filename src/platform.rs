@@ -3,13 +3,13 @@ use std::path::PathBuf;
 pub fn config_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| home().join(".config"))
-        .join("modeldesk")
+        .join("modelsdesk")
 }
 
 pub fn data_dir() -> PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| home().join(".local").join("share"))
-        .join("modeldesk")
+        .join("modelsdesk")
 }
 
 pub fn home() -> PathBuf {

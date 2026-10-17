@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "modeldesk",
+    name = "modelsdesk",
     version,
     about = "Manage local LLM servers — start/stop, health, models, providers",
     long_about = "ModelDesk manages local LLM inference servers on your machine.\n\
@@ -11,22 +11,22 @@ use clap::{Parser, Subcommand};
         Ollama work wherever their binaries run, so Linux/Windows follow.\n\
         \n\
         QUICK START:\n    \
-        modeldesk providers                 # what backends are installed\n    \
-        modeldesk models                    # what weights are downloaded\n    \
-        modeldesk start                     # launch the active model\n    \
-        modeldesk health                    # is it answering?\n    \
-        modeldesk watch                     # live animated console\n\
+        modelsdesk providers                 # what backends are installed\n    \
+        modelsdesk models                    # what weights are downloaded\n    \
+        modelsdesk start                     # launch the active model\n    \
+        modelsdesk health                    # is it answering?\n    \
+        modelsdesk watch                     # live animated console\n\
         \n\
-        Config lives at <config-dir>/modeldesk/config.toml — edit it directly\n\
-        or use `modeldesk profile add`. Logs at <data-dir>/modeldesk/logs/.",
+        Config lives at <config-dir>/modelsdesk/config.toml — edit it directly\n\
+        or use `modelsdesk profile add`. Logs at <data-dir>/modelsdesk/logs/.",
     after_help = "EXAMPLES:\n    \
-        modeldesk search qwen3 8b\n    \
-        modeldesk setup mlx-community/Qwen3-8B-8bit --start\n    \
-        modeldesk start --foreground\n    \
-        modeldesk use qwen3-8b --provider llama-cpp\n    \
-        modeldesk outdated\n    \
-        modeldesk doctor\n    \
-        modeldesk health --json | jq .",
+        modelsdesk search qwen3 8b\n    \
+        modelsdesk setup mlx-community/Qwen3-8B-8bit --start\n    \
+        modelsdesk start --foreground\n    \
+        modelsdesk use qwen3-8b --provider llama-cpp\n    \
+        modelsdesk outdated\n    \
+        modelsdesk doctor\n    \
+        modelsdesk health --json | jq .",
     arg_required_else_help = true
 )]
 pub struct Cli {
@@ -56,8 +56,8 @@ pub enum Commands {
             (brew/pipx, unless --no-install), then launch with animated\n\
             progress. First run downloads weights — expect minutes.",
         after_help = "EXAMPLES:\n    \
-            modeldesk start\n    \
-            modeldesk start --foreground    # attach; Ctrl-C stops the server"
+            modelsdesk start\n    \
+            modelsdesk start --foreground    # attach; Ctrl-C stops the server"
     )]
     Start {
         #[arg(long, help = "Run in foreground (attach to server output)")]
@@ -89,8 +89,8 @@ pub enum Commands {
             health endpoint. Reports model id, speculation mode, and any\n\
             memory-pressure warnings the backend surfaces.",
         after_help = "EXAMPLES:\n    \
-            modeldesk health\n    \
-            modeldesk status --json"
+            modelsdesk health\n    \
+            modelsdesk status --json"
     )]
     Health,
     #[command(
@@ -105,8 +105,8 @@ pub enum Commands {
             real sizes, mark the active profile, and (when the server runs)\n\
             show the provider registry with per-model fit for this machine.",
         after_help = "EXAMPLES:\n    \
-            modeldesk models\n    \
-            modeldesk models --json | jq '.local[].repo'"
+            modelsdesk models\n    \
+            modelsdesk models --json | jq '.local[].repo'"
     )]
     Models,
     #[command(
@@ -116,13 +116,13 @@ pub enum Commands {
             --restart does a full stop + animated boot. Unknown names are\n\
             registered as new profiles (provider guessed or via --provider).",
         after_help = "EXAMPLES:\n    \
-            modeldesk use lfm-2.5-8b\n    \
-            modeldesk use LiquidAI/LFM2.5-2.6B-MLX-bf16\n    \
-            modeldesk use qwen3-8b --provider llama-cpp\n    \
-            modeldesk use qwen3-8b --restart"
+            modelsdesk use lfm-2.5-8b\n    \
+            modelsdesk use LiquidAI/LFM2.5-2.6B-MLX-bf16\n    \
+            modelsdesk use qwen3-8b --provider llama-cpp\n    \
+            modelsdesk use qwen3-8b --restart"
     )]
     Use {
-        #[arg(help = "Profile name or repo id (see `modeldesk models`)")]
+        #[arg(help = "Profile name or repo id (see `modelsdesk models`)")]
         name: String,
         #[arg(long, help = "Force a full restart instead of hot-swap")]
         restart: bool,
@@ -137,12 +137,12 @@ pub enum Commands {
     },
     #[command(
         about = "List provider backends and install status",
-        long_about = "Show every backend modeldesk knows, whether its binary was\n\
+        long_about = "Show every backend modelsdesk knows, whether its binary was\n\
             found (and where), which platforms it supports, and the install\n\
             command when missing.",
         after_help = "EXAMPLES:\n    \
-            modeldesk providers\n    \
-            modeldesk providers --json"
+            modelsdesk providers\n    \
+            modelsdesk providers --json"
     )]
     Providers,
     #[command(
@@ -152,8 +152,8 @@ pub enum Commands {
             a byte. Without this, first `start` downloads silently inside\n\
             the boot animation.",
         after_help = "EXAMPLES:\n    \
-            modeldesk pull\n    \
-            modeldesk pull qwen3-8b"
+            modelsdesk pull\n    \
+            modelsdesk pull qwen3-8b"
     )]
     Pull {
         #[arg(help = "Profile name to fetch (default: active profile)")]
@@ -166,9 +166,9 @@ pub enum Commands {
             backend is installed, RAM estimate vs this machine, and whether\n\
             the weights are already cached. Sorted by downloads.",
         after_help = "EXAMPLES:\n    \
-            modeldesk search qwen3 8b\n    \
-            modeldesk search LiquidAI LFM --limit 20\n    \
-            modeldesk search mistral --json | jq '.[].repo'"
+            modelsdesk search qwen3 8b\n    \
+            modelsdesk search LiquidAI LFM --limit 20\n    \
+            modelsdesk search mistral --json | jq '.[].repo'"
     )]
     Search {
         #[arg(help = "Search terms")]
@@ -185,9 +185,9 @@ pub enum Commands {
             serving immediately.\n\
             Missing backends auto-install unless --no-install.",
         after_help = "EXAMPLES:\n    \
-            modeldesk setup mlx-community/Qwen3-8B-8bit\n    \
-            modeldesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start\n    \
-            modeldesk setup ./models/mistral-7b.Q4_K_M.gguf --provider llama-cpp --start"
+            modelsdesk setup mlx-community/Qwen3-8B-8bit\n    \
+            modelsdesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start\n    \
+            modelsdesk setup ./models/mistral-7b.Q4_K_M.gguf --provider llama-cpp --start"
     )]
     Setup {
         #[arg(help = "Repo id, GGUF path, or ollama name")]
@@ -209,12 +209,12 @@ pub enum Commands {
     #[command(
         about = "Sync OpenCode/jcode configs to the active model",
         long_about = "Rewrite the local-model entries in OpenCode's opencode.json\n\
-            and jcode's config.toml to point at modeldesk's active profile\n\
+            and jcode's config.toml to point at modelsdesk's active profile\n\
             (same port, current model id + context window). Run after every\n\
             `use`/`setup` so switching models never breaks the agents.",
         after_help = "EXAMPLES:\n    \
-            modeldesk sync-agents\n    \
-            modeldesk use qwen3-8b && modeldesk sync-agents"
+            modelsdesk sync-agents\n    \
+            modelsdesk use qwen3-8b && modelsdesk sync-agents"
     )]
     SyncAgents,
     #[command(
@@ -224,8 +224,8 @@ pub enum Commands {
             against its HuggingFace lastModified. Network-dependent; skips\n\
             quietly unreachable sources as 'unknown' instead of failing.",
         after_help = "EXAMPLES:\n    \
-            modeldesk outdated\n    \
-            modeldesk outdated --json"
+            modelsdesk outdated\n    \
+            modelsdesk outdated --json"
     )]
     Outdated {
         #[arg(
@@ -242,10 +242,10 @@ pub enum Commands {
             (MLX = Apple Silicon + macOS), RAM estimate vs this machine,\n\
             port availability. Fails fast with an actionable hint.",
         after_help = "EXAMPLES:\n    \
-            modeldesk doctor\n    \
-            modeldesk doctor qwen3-8b\n    \
-            modeldesk doctor --fix\n    \
-            modeldesk doctor --json"
+            modelsdesk doctor\n    \
+            modelsdesk doctor qwen3-8b\n    \
+            modelsdesk doctor --fix\n    \
+            modelsdesk doctor --json"
     )]
     Doctor {
         #[arg(help = "Profile name to check (default: active profile)")]
@@ -262,9 +262,9 @@ pub enum Commands {
             repo + provider + drafter + tuning (kv-bits, context window,\n\
             temperature, speculation mode). Add once, `use` forever.",
         after_help = "EXAMPLES:\n    \
-            modeldesk profile list\n    \
-            modeldesk profile add lfm-2.5-8b LiquidAI/LFM2.5-8B-A1B-MLX-4bit --drafter LiquidAI/LFM2.5-8B-A1B-DSpark\n    \
-            modeldesk profile show lfm-2.5-8b"
+            modelsdesk profile list\n    \
+            modelsdesk profile add lfm-2.5-8b LiquidAI/LFM2.5-8B-A1B-MLX-4bit --drafter LiquidAI/LFM2.5-8B-A1B-DSpark\n    \
+            modelsdesk profile show lfm-2.5-8b"
     )]
     Profile {
         #[command(subcommand)]
@@ -273,8 +273,8 @@ pub enum Commands {
     #[command(
         about = "Show the server log",
         after_help = "EXAMPLES:\n    \
-            modeldesk logs\n    \
-            modeldesk logs 100 --follow"
+            modelsdesk logs\n    \
+            modelsdesk logs 100 --follow"
     )]
     Logs {
         #[arg(help = "Lines to show (default 30)")]
@@ -292,7 +292,7 @@ pub enum Commands {
     #[command(
         about = "Print shell completions",
         after_help = "EXAMPLES:\n    \
-            modeldesk completions zsh > ~/.zsh/completions/_modeldesk"
+            modelsdesk completions zsh > ~/.zsh/completions/_modelsdesk"
     )]
     Completions {
         #[arg(help = "Shell")]
@@ -306,7 +306,7 @@ pub enum ProfileCommands {
     List,
     #[command(
         about = "Show one profile in detail",
-        after_help = "EXAMPLES:\n    modeldesk profile show lfm-2.5-8b"
+        after_help = "EXAMPLES:\n    modelsdesk profile show lfm-2.5-8b"
     )]
     Show {
         #[arg(help = "Profile name")]
@@ -318,9 +318,9 @@ pub enum ProfileCommands {
             compatibility is validated before anything is written — a bad\n\
             profile is rejected with the reason, not saved.",
         after_help = "EXAMPLES:\n    \
-            modeldesk profile add lfm-2.5-8b LiquidAI/LFM2.5-8B-A1B-MLX-4bit --drafter LiquidAI/LFM2.5-8B-A1B-DSpark\n    \
-            modeldesk profile add qwen3-8b mlx-community/Qwen3-8B-8bit --provider mlx-dspark\n    \
-            modeldesk profile add mistral-7b ./models/mistral-7b.Q4_K_M.gguf --provider llama-cpp --context-window 8192"
+            modelsdesk profile add lfm-2.5-8b LiquidAI/LFM2.5-8B-A1B-MLX-4bit --drafter LiquidAI/LFM2.5-8B-A1B-DSpark\n    \
+            modelsdesk profile add qwen3-8b mlx-community/Qwen3-8B-8bit --provider mlx-dspark\n    \
+            modelsdesk profile add mistral-7b ./models/mistral-7b.Q4_K_M.gguf --provider llama-cpp --context-window 8192"
     )]
     Add {
         #[arg(help = "Short name, e.g. lfm-2.5-8b")]
@@ -351,7 +351,7 @@ pub enum ProfileCommands {
     },
     #[command(
         about = "Remove a profile",
-        after_help = "EXAMPLES:\n    modeldesk profile remove old-model"
+        after_help = "EXAMPLES:\n    modelsdesk profile remove old-model"
     )]
     Remove {
         #[arg(help = "Profile name")]

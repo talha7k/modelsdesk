@@ -29,7 +29,7 @@ pub struct SearchHit {
 fn hf_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
-        .user_agent("modeldesk/0.1.0")
+        .user_agent("modelsdesk/0.1.0")
         .build()
         .expect("hf http client")
 }
@@ -164,7 +164,7 @@ pub fn print_hits(hits: &[SearchHit], json: bool) -> Result<()> {
     }
     println!(
         "\n{}",
-        output::dim("setup one: `modeldesk setup <repo> [--provider ID] [--name NAME]`")
+        output::dim("setup one: `modelsdesk setup <repo> [--provider ID] [--name NAME]`")
     );
     Ok(())
 }

@@ -15,35 +15,35 @@ description: >-
 
 # ModelDesk
 
-`modeldesk` is a Rust CLI that manages local LLM inference servers —
+`modelsd` (the modelsdesk CLI) is a Rust CLI that manages local LLM inference servers —
 macOS first (MLX + mlx-dspark), provider-agnostic core (llama.cpp,
 Ollama work cross-platform).
 
-- **Install:** `cargo install modeldesk` (crates.io) or
-  `cargo install --path .` from https://github.com/talha7k/modeldesk
-- **Source:** https://github.com/talha7k/modeldesk (GPL-3.0-or-later)
+- **Install:** `cargo install modelsdesk` (crates.io) or
+  `cargo install --path .` from https://github.com/talha7k/modelsdesk
+- **Source:** https://github.com/talha7k/modelsdesk (GPL-3.0-or-later)
 
 ## Command map
 
 | Task | Command |
 |---|---|
-| Find runnable models on HF | `modeldesk search <terms> [--limit N]` |
-| Set up end-to-end (verify → install → download → serve) | `modeldesk setup <repo> [--name N] [--provider ID] [--drafter R] [--start]` |
-| What's installed (+versions) | `modeldesk providers` |
-| What's downloaded | `modeldesk models` |
-| Validate before launch | `modeldesk doctor [name] [--fix]` |
-| Start (validated, auto-installs backend) | `modeldesk start [--foreground] [--no-install]` |
-| Stop | `modeldesk stop` |
-| Restart | `modeldesk restart` |
-| Health probe | `modeldesk health` (alias `status`) |
-| Switch model (hot-swap + agent re-sync) | `modeldesk use <name> [--provider <id>] [--restart]` |
-| Pre-fetch weights | `modeldesk pull [name]` |
-| Backend + model freshness | `modeldesk outdated` |
-| Sync OpenCode/jcode to active model | `modeldesk sync-agents` |
-| Live console | `modeldesk watch` (q to quit) |
-| Logs | `modeldesk logs [n] [--follow]` |
-| Profiles | `modeldesk profile <list\|show\|add\|remove>` |
-| Completions | `modeldesk completions <bash\|zsh\|fish\|powershell\|elvish>` |
+| Find runnable models on HF | `modelsd search <terms> [--limit N]` |
+| Set up end-to-end (verify → install → download → serve) | `modelsd setup <repo> [--name N] [--provider ID] [--drafter R] [--start]` |
+| What's installed (+versions) | `modelsd providers` |
+| What's downloaded | `modelsd models` |
+| Validate before launch | `modelsd doctor [name] [--fix]` |
+| Start (validated, auto-installs backend) | `modelsd start [--foreground] [--no-install]` |
+| Stop | `modelsd stop` |
+| Restart | `modelsd restart` |
+| Health probe | `modelsd health` (alias `status`) |
+| Switch model (hot-swap + agent re-sync) | `modelsd use <name> [--provider <id>] [--restart]` |
+| Pre-fetch weights | `modelsd pull [name]` |
+| Backend + model freshness | `modelsd outdated` |
+| Sync OpenCode/jcode to active model | `modelsd sync-agents` |
+| Live console | `modelsd watch` (q to quit) |
+| Logs | `modelsd logs [n] [--follow]` |
+| Profiles | `modelsd profile <list\|show\|add\|remove>` |
+| Completions | `modelsd completions <bash\|zsh\|fish\|powershell\|elvish>` |
 
 Append `--json` to health/models/providers/use/doctor/search/outdated/sync-agents
 for machine output. Append `--verbose` for stderr diagnostics.
@@ -52,8 +52,8 @@ for machine output. Append `--verbose` for stderr diagnostics.
 ## Setup flow (the happy path)
 
 ```bash
-modeldesk search qwen3 8b                 # annotated HF hits
-modeldesk setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start
+modelsd search qwen3 8b                 # annotated HF hits
+modelsd setup mlx-community/Qwen3-8B-8bit --name qwen3-8b --start
 modeldesk health
 ```
 
@@ -79,7 +79,7 @@ llama.cpp download into `~/.cache/modeldesk/gguf/` (Q4_K_M preferred).
 
 ## Profiles (stored model configs)
 
-Profiles live in `config.toml` (see `modeldesk profile list` for the path).
+Profiles live in `config.toml` (see `modelsd profile list` for the path).
 Each profile: `name + provider + repo + drafter? + kv_bits + context_window? +
 temperature? + mode?`.
 
@@ -96,7 +96,7 @@ combo is rejected with the reason, never stored.
 
 ## Freshness (outdated detection)
 
-- `modeldesk outdated`: live check of backend releases (PyPI / brew
+- `modelsd outdated`: live check of backend releases (PyPI / brew
   livecheck / GitHub releases) + cached-model staleness (HF `lastModified`
   vs cache mtime, 24h grace for metadata-only bumps).
 - **Ambient warnings:** every other command prints cached `! outdated: …`
@@ -129,8 +129,8 @@ The server is OpenAI-compatible at `http://127.0.0.1:<port>/v1`
   FAILs on its `/v1/models` probe (no bearer sent) while chat completions
   work — verify with a real `run`, not `auth-test`.
 
-`modeldesk sync-agents` rewrites both configs to the active profile;
-`modeldesk use` runs it automatically after every switch.
+`modelsd sync-agents` rewrites both configs to the active profile;
+`modelsd use` runs it automatically after every switch.
 
 ## Safety rules
 

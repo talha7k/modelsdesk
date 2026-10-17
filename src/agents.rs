@@ -104,7 +104,7 @@ fn sync_opencode(model_id: &str, base_url: &str, context: i64) -> Result<std::pa
     if let Some(models) = provider.pointer_mut("/models") {
         if let Some(obj) = models.as_object_mut() {
             // Replace the whole model map: one entry for the active model.
-            let name = format!("{} (modeldesk)", model_id);
+            let name = format!("{} (modelsdesk)", model_id);
             *obj = [(
                 model_id.to_string(),
                 serde_json::json!({

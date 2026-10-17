@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // modeldesk bin shim (platform-binary pattern): resolve this platform's
-// native binary from the matching @talha7k/modeldesk-<platform>
+// native binary from the matching @modelsdesk/<platform>
 // optionalDependency and hand it the argv verbatim. Clear, actionable error
 // when the binary is missing — never a raw stack trace.
 import { spawnSync } from "node:child_process";
@@ -13,9 +13,9 @@ const require = createRequire(import.meta.url);
 
 let bin;
 try {
-  bin = require.resolve(`@talha7k/modeldesk-${platform}/bin/modeldesk`);
+  bin = require.resolve(`@modelsdesk/${platform}/bin/modelsd`);
 } catch (err) {
-  console.error(`modeldesk: no native binary for ${platform}.`);
+  console.error(`modelsd: no native binary for ${platform}.`);
   if (!SUPPORTED.has(platform)) {
     console.error(
       `  ${platform} is not supported yet (supported: ${[...SUPPORTED].sort().join(", ")}).`,
@@ -23,7 +23,7 @@ try {
     console.error(`  Linux/Windows follow the provider-agnostic core — track releases.`);
   } else {
     console.error(
-      `  Install the platform package: npm install -g @talha7k/modeldesk-${platform}`,
+      `  Install the platform package: npm install -g @modelsdesk/${platform}`,
     );
   }
   process.exit(1);

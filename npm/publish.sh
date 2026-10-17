@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 VERSION="$(node -p "require('./package.json').version")"
-echo "modeldesk npm publish v$VERSION"
+echo "modelsdesk npm publish v$VERSION"
 
 # 1. Stage skills into the tarball (source of truth: repo root skills/)
 rm -rf ./skills
@@ -16,7 +16,7 @@ cp -r ../skills ./skills
 # 2. Stage the release binary into each platform package
 cargo build --release --manifest-path ../Cargo.toml
 mkdir -p ./platforms/darwin-arm64/bin
-cp ../target/release/modeldesk ./platforms/darwin-arm64/bin/modeldesk
+cp ../target/release/modelsd ./platforms/darwin-arm64/bin/modelsd
 
 # 3. Publish platform packages first (root depends on them)
 for plat in platforms/*/; do
@@ -29,5 +29,5 @@ echo "--- publishing root"
 npm publish --access public .
 
 # 5. Clean staged artifacts (binaries + skills copy never committed)
-rm -rf ./skills ./platforms/*/bin/modeldesk
-echo "done: modeldesk@$VERSION"
+rm -rf ./skills ./platforms/*/bin/modelsd
+echo "done: modelsdesk@$VERSION"

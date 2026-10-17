@@ -31,10 +31,10 @@ pub enum ModeldeskError {
         last: String,
     },
 
-    #[error("no model named '{name}' — see `modeldesk models`")]
+    #[error("no model named '{name}' — see `modelsdesk models`")]
     UnknownModel { name: String },
 
-    #[error("unknown provider '{id}' — see `modeldesk providers`")]
+    #[error("unknown provider '{id}' — see `modelsdesk providers`")]
     UnknownProvider { id: String },
 
     #[error("profile '{name}' already exists (use --overwrite to replace it)")]
@@ -55,7 +55,7 @@ impl ModeldeskError {
                 _ => format!("install the '{provider}' backend"),
             }),
             Self::Incompatible { provider, .. } => Some(
-                format!("try `modeldesk use <model> --provider <id>` — see `modeldesk providers`")
+                format!("try `modelsdesk use <model> --provider <id>` — see `modelsdesk providers`")
                     .replace("<id>", provider),
             ),
             Self::InsufficientMemory { .. } => {
@@ -64,7 +64,7 @@ impl ModeldeskError {
             Self::PortBusy { .. } => {
                 Some("`lsof -i :<port>` shows the holder; never kill it blindly".to_string())
             }
-            Self::Unhealthy { .. } => Some("`modeldesk logs` shows why it failed".to_string()),
+            Self::Unhealthy { .. } => Some("`modelsdesk logs` shows why it failed".to_string()),
             _ => None,
         }
     }

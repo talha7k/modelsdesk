@@ -12,7 +12,7 @@ VERSION="$1"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR"
 
-echo "=== Releasing modeldesk@$VERSION ==="
+echo "=== Releasing modelsdesk@$VERSION ==="
 
 # 1. Bump version in all manifests
 echo "— bumping version"
@@ -34,7 +34,7 @@ git push origin main "v$VERSION"
 # 3. Publish crate to crates.io
 echo "— publishing crate"
 varlock run -- cargo publish
-echo "  ✓ crates.io: modeldesk@$VERSION"
+echo "  ✓ crates.io: modelsdesk@$VERSION"
 
 # 4. Publish npm packages via worktree (keeps staged artifacts out of main tree)
 echo "— publishing npm"
@@ -45,12 +45,12 @@ printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$WT/npm/.npmrc"
 chmod 600 "$WT/npm/.npmrc"
 varlock run -- bash -c "cd '$WT' && ./npm/publish.sh"
 git worktree remove --force "$WT"
-echo "  ✓ npm: modeldesk@$VERSION"
+echo "  ✓ npm: modelsdesk@$VERSION"
 
 # 5. Verify
 echo "— verifying"
-npm view modeldesk dist-tags --prefer-online 2>/dev/null | grep "$VERSION" && echo "  ✓ npm resolved"
-cargo search modeldesk --limit 1 2>/dev/null | grep "$VERSION" && echo "  ✓ crates.io resolved"
+npm view modelsdesk dist-tags --prefer-online 2>/dev/null | grep "$VERSION" && echo "  ✓ npm resolved"
+cargo search modelsdesk --limit 1 2>/dev/null | grep "$VERSION" && echo "  ✓ crates.io resolved"
 
 echo ""
-echo "✅ modeldesk@$VERSION published to npm + crates.io"
+echo "✅ modelsdesk@$VERSION published to npm + crates.io"

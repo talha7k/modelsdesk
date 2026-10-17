@@ -1,14 +1,14 @@
 {
-  "name": "modeldesk",
+  "name": "modelsdesk",
   "version": "0.1.0",
   "description": "One CLI to find, install, serve, and monitor local LLMs — macOS first, provider-agnostic core.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "bin": {
-    "modeldesk": "bin/modeldesk.js"
+    "modelsd": "bin/modelsd.js"
   },
   "optionalDependencies": {
-    "@talha7k/modeldesk-darwin-arm64": "0.1.0"
+    "@modelsdesk/darwin-arm64": "0.1.0"
   },
   "engines": {
     "node": ">=20"
@@ -19,10 +19,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/talha7k/modeldesk.git"
+    "url": "git+https://github.com/talha7k/modelsdesk.git"
   },
-  "homepage": "https://github.com/talha7k/modeldesk#readme",
+  "homepage": "https://github.com/talha7k/modelsdesk#readme",
   "bugs": {
-    "url": "https://github.com/talha7k/modeldesk/issues"
+    "url": "https://github.com/talha7k/modelsdesk/issues"
   }
 }

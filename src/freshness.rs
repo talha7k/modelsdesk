@@ -127,14 +127,14 @@ fn print_warnings(report: &AmbientReport) {
                 "update available:",
                 b.installed.as_deref().unwrap_or("?"),
                 b.latest.as_deref().unwrap_or("?"),
-                b.update_cmd.as_deref().unwrap_or("modeldesk outdated")
+                b.update_cmd.as_deref().unwrap_or("modelsdesk outdated")
             )),
             Freshness::BelowMinimum => lines.push(format!(
                 "{} {} v{} is below minimum — upgrade now ({})",
                 b.backend,
                 "OUTDATED:",
                 b.installed.as_deref().unwrap_or("?"),
-                b.update_cmd.as_deref().unwrap_or("modeldesk outdated")
+                b.update_cmd.as_deref().unwrap_or("modelsdesk outdated")
             )),
             _ => {}
         }
@@ -152,7 +152,7 @@ fn print_warnings(report: &AmbientReport) {
         return;
     }
     eprintln!(
-        "{} {} — run `modeldesk outdated` for details",
+        "{} {} — run `modelsdesk outdated` for details",
         crate::output::warn("outdated:"),
         lines.join("; ")
     );
@@ -163,7 +163,7 @@ fn refresh_in_background() {
     // failures are silent by design (the next command retries).
     let exe = std::env::current_exe()
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "modeldesk".to_string());
+        .unwrap_or_else(|_| "modelsdesk".to_string());
     let _ = std::process::Command::new(exe)
         .args(["outdated", "--refresh-cache"])
         .stdin(std::process::Stdio::null())
@@ -175,7 +175,7 @@ fn refresh_in_background() {
 fn http() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("modeldesk/0.1.0")
+        .user_agent("modelsdesk/0.1.0")
         .build()
         .expect("freshness http client")
 }

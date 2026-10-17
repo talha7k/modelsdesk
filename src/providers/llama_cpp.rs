@@ -27,7 +27,7 @@ impl Provider for LlamaCpp {
     }
 
     fn min_version(&self) -> Option<(u64, u64, u64)> {
-        // b5000+ ships the OpenAI-compatible /health + /v1 routes modeldesk uses.
+        // b5000+ ships the OpenAI-compatible /health + /v1 routes modelsdesk uses.
         Some((5000, 0, 0))
     }
 

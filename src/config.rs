@@ -100,7 +100,7 @@ impl Config {
             .cloned()
             .with_context(|| {
                 format!(
-                    "no model named '{want}' in {} (see `modeldesk models`)",
+                    "no model named '{want}' in {} (see `modelsdesk models`)",
                     platform::config_path().display()
                 )
             })

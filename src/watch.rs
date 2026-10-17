@@ -173,7 +173,7 @@ pub async fn live_console(cfg: &Config) -> Result<()> {
                 Paragraph::new(status_text.clone()).block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(format!("modeldesk :{} (q to quit)", cfg.port)),
+                        .title(format!("modelsdesk :{} (q to quit)", cfg.port)),
                 ),
                 chunks[0],
             );

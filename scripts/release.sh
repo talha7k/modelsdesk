@@ -3,10 +3,14 @@
 # Usage: ./scripts/release.sh <version>   (e.g. ./scripts/release.sh 0.2.0)
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
+usage() {
   echo "Usage: $0 <version>"
+  echo "  1. Add a '## <version> - YYYY-MM-DD' section to CHANGELOG.md"
+  echo "  2. Commit any pending work (tree must be clean)"
+  echo "  3. Run this script — it bumps, prechecks, tags, publishes"
   exit 1
-fi
+}
+[[ $# -lt 1 ]] && usage
 
 VERSION="$1"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +29,8 @@ fi
 echo "— bumping version"
 sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
 rm -f Cargo.toml.bak
+# Refresh the lockfile so cargo publish sees the new version.
+cargo update -p modelsdesk --quiet 2>/dev/null || cargo check --quiet >/dev/null
 
 for pkg in npm/package.json npm/platforms/darwin-arm64/package.json; do
   jq -M --arg v "$VERSION" '.version = $v' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
@@ -34,10 +40,18 @@ jq -M --arg v "$VERSION" \
   '.optionalDependencies["@modelsdesk/darwin-arm64"] = $v' \
   npm/package.json > npm/package.json.tmp && mv npm/package.json.tmp npm/package.json
 
+# 1b. Precheck: every bump + changelog must be consistent before anything ships.
+echo "— precheck"
+"$DIR/scripts/precheck.sh" "$VERSION"
+
 # 2. Commit + tag
 echo "— committing"
-git add Cargo.toml npm/package.json npm/platforms/darwin-arm64/package.json CHANGELOG.md
-git commit -m "chore(release): v$VERSION" --quiet
+git add Cargo.toml Cargo.lock npm/package.json npm/platforms/darwin-arm64/package.json CHANGELOG.md
+if git diff --cached --quiet; then
+  echo "  (nothing to commit — versions already bumped)"
+else
+  git commit -m "chore(release): v$VERSION" --quiet
+fi
 git tag "v$VERSION"
 echo "— pushing"
 git push origin main "v$VERSION"

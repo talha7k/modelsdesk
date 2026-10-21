@@ -37,10 +37,14 @@ if [[ "$TARGET" =~ $semver_re ]]; then ok "semver: $TARGET"; else
 fi
 
 echo "— git state"
-if [[ -n "$(git status --porcelain)" ]]; then
-  fail "working tree has uncommitted changes" "commit or stash first (cargo publish needs a clean tree)"
+# Allow dirty state for exactly the files this release manages (release.sh
+# runs precheck between bumping and committing).
+MANAGED=(Cargo.toml Cargo.lock CHANGELOG.md npm/package.json npm/platforms)
+UNMANAGED_DIRTY="$(git status --porcelain | grep -v -E '^( M|\?\?) (Cargo\.toml|Cargo\.lock|CHANGELOG\.md|npm/package\.json|npm/platforms/)' || true)"
+if [[ -n "$UNMANAGED_DIRTY" ]]; then
+  fail "working tree has uncommitted changes outside release files" "commit or stash first (cargo publish needs a clean tree)"
 else
-  ok "clean tree"
+  ok "clean tree (release-managed files may be dirty pre-commit)"
 fi
 LAST_TAG="$(git tag --sort=-v:refname | grep -E '^v[0-9]' | head -1 || true)"
 if [[ -n "$LAST_TAG" ]]; then

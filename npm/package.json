@@ -1,6 +1,6 @@
 {
   "name": "modelsdesk",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "One CLI to find, install, serve, and monitor local LLMs — macOS first, provider-agnostic core.",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -8,7 +8,7 @@
     "modelsd": "bin/modelsd.js"
   },
   "optionalDependencies": {
-    "@modelsdesk/darwin-arm64": "0.2.1"
+    "@modelsdesk/darwin-arm64": "0.3.0"
   },
   "engines": {
     "node": ">=20"

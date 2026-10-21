@@ -1,6 +1,6 @@
 {
   "name": "modelsdesk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "One CLI to find, install, serve, and monitor local LLMs — macOS first, provider-agnostic core.",
   "license": "GPL-3.0-or-later",
   "type": "module",

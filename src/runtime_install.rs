@@ -42,6 +42,10 @@ pub fn plan(backend: &str, env: &Env) -> Result<InstallPlan> {
         "mlx-lm" => mlx_lm_steps(env)?,
         "llama-cpp" => llama_steps(env)?,
         "ollama" => ollama_steps(env)?,
+        "strata" => strata_steps(env)?,
+        "mistral-rs" => mistral_rs_steps(env)?,
+        "vllm" => vllm_steps(env)?,
+        "sglang" => sglang_steps(env)?,
         _ => anyhow::bail!("unknown backend '{backend}'"),
     };
     Ok(InstallPlan {
@@ -180,6 +184,45 @@ fn ollama_steps(env: &Env) -> Result<Vec<InstallStep>> {
         anyhow::bail!("install Ollama from https://ollama.com/download (or winget)");
     }
     anyhow::bail!("no install path for ollama on {}", env.label())
+}
+
+fn strata_steps(env: &Env) -> Result<Vec<InstallStep>> {
+    // Strata ships its own verified install script (curl | sh / PowerShell).
+    if env.os == Os::Windows {
+        anyhow::bail!("install Strata from https://github.com/Niko1221/Strata/releases (PowerShell: irm https://github.com/Niko1221/Strata/releases/latest/download/install.ps1 | iex)");
+    }
+    Ok(vec![InstallStep {
+        manager: PackageManager::Apt, // marker only; step_command routes curl labels through sh -c
+        manager_label: "curl -fsSL https://github.com/Niko1221/Strata/releases/latest/download/install.sh | sh",
+        args: vec![],
+    }])
+}
+
+fn mistral_rs_steps(env: &Env) -> Result<Vec<InstallStep>> {
+    // mistral.rs ships its own installer (https://mistralrs.dev/install.sh).
+    if env.os == Os::Windows {
+        anyhow::bail!("install mistral.rs from https://docs.mistralrs.dev/quickstart/ (PowerShell: irm https://mistralrs.dev/install.ps1 | iex)");
+    }
+    Ok(vec![InstallStep {
+        manager: PackageManager::Apt, // marker only; curl labels route through sh -c
+        manager_label: "curl -fsSL https://mistralrs.dev/install.sh | sh",
+        args: vec![],
+    }])
+}
+
+fn vllm_steps(env: &Env) -> Result<Vec<InstallStep>> {
+    // vLLM needs CUDA/NPU accelerators; CPU macOS is not a target.
+    if env.os != Os::Linux && env.os != Os::Windows {
+        anyhow::bail!("vLLM targets Linux/Windows with CUDA — see https://docs.vllm.ai/en/latest/getting_started/installation.html");
+    }
+    anyhow::bail!("install vLLM with pip: `pip install vllm` (needs CUDA) — see https://docs.vllm.ai")
+}
+
+fn sglang_steps(env: &Env) -> Result<Vec<InstallStep>> {
+    if env.os != Os::Linux {
+        anyhow::bail!("SGLang targets Linux with CUDA — see https://docs.sglang.ai/start.html");
+    }
+    anyhow::bail!("install SGLang with pip: `pip install sglang[all]` (needs CUDA) — see https://docs.sglang.ai")
 }
 
 pub fn run_plan(plan: &InstallPlan) -> Result<()> {

@@ -14,6 +14,13 @@ cd "$DIR"
 
 echo "=== Releasing modelsdesk@$VERSION ==="
 
+# 0. Changelog guard: the version must have an entry in CHANGELOG.md
+if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
+  echo "error: CHANGELOG.md has no entry for [$VERSION]" >&2
+  echo "add a '## [$VERSION] - YYYY-MM-DD' section before releasing" >&2
+  exit 1
+fi
+
 # 1. Bump version in all manifests
 echo "— bumping version"
 sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
@@ -25,7 +32,7 @@ done
 
 # 2. Commit + tag
 echo "— committing"
-git add Cargo.toml npm/package.json npm/platforms/darwin-arm64/package.json
+git add Cargo.toml npm/package.json npm/platforms/darwin-arm64/package.json CHANGELOG.md
 git commit -m "chore(release): v$VERSION" --quiet
 git tag "v$VERSION"
 echo "— pushing"

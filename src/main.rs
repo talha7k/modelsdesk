@@ -322,7 +322,7 @@ async fn run_models(cfg: &Config, json: bool) -> Result<()> {
     );
     println!("\n{}", output::bold("downloaded:"));
     if local.is_empty() {
-        println!("  {}", output::dim("(none found in HF/LMStudio caches)"));
+        println!("  {}", output::dim("(none found in HF cache)"));
     }
     for m in &local {
         let size = m
@@ -1230,7 +1230,11 @@ fn hint_for(e: &anyhow::Error) -> Option<String> {
 fn provider_platforms(id: &str) -> Vec<&'static str> {
     match id {
         "mlx-dspark" | "mlx-lm" => vec!["macos"],
-        "llama-cpp" | "ollama" => vec!["macos", "linux", "windows"],
+        "llama-cpp" | "ollama" | "strata" | "mistral-rs" => {
+            vec!["macos", "linux", "windows"]
+        }
+        "vllm" => vec!["linux", "windows"],
+        "sglang" => vec!["linux"],
         _ => vec!["macos"],
     }
 }

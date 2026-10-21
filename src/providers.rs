@@ -131,6 +131,10 @@ fn package_version(backend: &str) -> Option<String> {
         "mlx-lm" => brew_version("mlx-lm"),
         "llama-cpp" => brew_version("llama.cpp"),
         "ollama" => brew_version("ollama"),
+        "strata" => None, // installs via its own install.sh, no package-manager record
+        "mistral-rs" => None,
+        "vllm" => pip_version_pub("vllm"),
+        "sglang" => pip_version_pub("sglang"),
         _ => None,
     }
 }
@@ -172,6 +176,11 @@ fn pip_version(pkg: &str) -> Option<String> {
     })
 }
 
+/// Public wrapper for package_version lookups (vllm, sglang via pip).
+fn pip_version_pub(pkg: &str) -> Option<String> {
+    pip_version(pkg)
+}
+
 fn brew_version(formula: &str) -> Option<String> {
     let out = cmd_out("brew", &["list", "--versions", formula])?;
     // "mlx-lm 0.32.0_1" → take the first version-looking token.
@@ -181,9 +190,13 @@ fn brew_version(formula: &str) -> Option<String> {
 }
 
 pub mod llama_cpp;
+pub mod mistral_rs;
 pub mod mlx_dspark;
 pub mod mlx_lm;
+pub mod vllm;
 pub mod ollama;
+pub mod sglang;
+pub mod strata;
 
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
@@ -191,6 +204,10 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(mlx_lm::MlxLm),
         Box::new(llama_cpp::LlamaCpp),
         Box::new(ollama::Ollama),
+        Box::new(strata::Strata),
+        Box::new(mistral_rs::MistralRs),
+        Box::new(vllm::Vllm),
+        Box::new(sglang::Sglang),
     ]
 }
 

@@ -52,6 +52,10 @@ impl ModeldeskError {
                 "mlx-lm" => "brew install mlx-lm".to_string(),
                 "llama-cpp" => "brew install llama.cpp".to_string(),
                 "ollama" => "brew install ollama".to_string(),
+                "strata" => "curl -fsSL https://github.com/Niko1221/Strata/releases/latest/download/install.sh | sh".to_string(),
+                "mistral-rs" => "curl -fsSL https://mistralrs.dev/install.sh | sh".to_string(),
+                "vllm" => "pip install vllm".to_string(),
+                "sglang" => "pip install 'sglang[all]'".to_string(),
                 _ => format!("install the '{provider}' backend"),
             }),
             Self::Incompatible { provider, .. } => Some(

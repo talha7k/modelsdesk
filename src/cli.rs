@@ -101,7 +101,7 @@ pub enum Commands {
     Check,
     #[command(
         about = "List downloaded models and registry fit",
-        long_about = "Scan the HuggingFace + LM Studio caches for weights with\n\
+        long_about = "Scan the HuggingFace cache for weights with\n\
             real sizes, mark the active profile, and (when the server runs)\n\
             show the provider registry with per-model fit for this machine.",
         after_help = "EXAMPLES:\n    \
@@ -129,8 +129,9 @@ pub enum Commands {
         #[arg(
             long,
             help = "Provider backend for this model",
-            long_help = "Pin the backend: mlx-dspark, mlx-lm, llama-cpp, ollama.\n\
-                Without it, GGUF paths default to llama-cpp, everything else\n\
+            long_help = "Pin the backend: mlx-dspark, mlx-lm, llama-cpp, ollama, strata,\n\
+                mistral-rs, vllm, sglang. Without it, GGUF paths default to\n\
+                llama-cpp, everything else\n\
                 to mlx-dspark. Stored on the profile for next time."
         )]
         provider: Option<String>,

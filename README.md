@@ -58,7 +58,7 @@ modeldesk completions zsh > ~/.zsh/completions/_modeldesk
 
 # 2. See what's available
 modeldesk providers   # backends: installed? which version? supported here?
-modeldesk models      # weights already in your HF / LM Studio caches
+modeldesk models      # weights already in your HF cache
 
 # 3. Find a model that fits this machine
 modeldesk search "LFM 8b" --limit 5
@@ -72,7 +72,7 @@ modeldesk health
 ```
 
 Point any OpenAI-compatible client at `http://127.0.0.1:8090/v1` — OpenCode,
-Claude Code wrappers, LM Studio, plain `curl`. An Anthropic-compatible endpoint
+Claude Code wrappers, plain `curl`. An Anthropic-compatible endpoint
 lives at `/v1/messages` on backends that provide one (mlx-dspark).
 
 ## Commands

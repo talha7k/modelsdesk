@@ -71,6 +71,10 @@ backend install status, RAM estimate vs this machine, and cache state.
 | `mlx-lm` | MLX | macOS arm64, macOS 14+ | `brew install mlx-lm` |
 | `llama-cpp` | GGUF (auto-downloaded) | macOS/Linux/Windows | brew / apt / dnf / pacman / winget / choco |
 | `ollama` | registry names | macOS/Linux/Windows | brew / install script / winget |
+| `strata` | own tiers (q2_0, iq3_s, gyro-s…) | macOS/Linux/Windows | `curl … install.sh \| sh` (Strata) |
+| `mistral-rs` | GGUF + safetensors | macOS/Linux/Windows | `curl … mistralrs.dev/install.sh \| sh` |
+| `vllm` | safetensors/GGUF | Linux/Windows (CUDA) | `pip install vllm` |
+| `sglang` | safetensors/GGUF | Linux (CUDA) | `pip install 'sglang[all]'` |
 
 `start`, `setup`, and `doctor --fix` install a missing backend automatically
 (OS + distro detected at runtime). Minimum versions are gated (mlx-dspark

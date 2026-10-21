@@ -11,7 +11,7 @@ fn isolated_home() -> TempDir {
 }
 
 fn cmd_with_home(dir: &TempDir) -> Command {
-    let mut cmd = Command::cargo_bin("modeldesk").unwrap();
+    let mut cmd = Command::cargo_bin("modelsd").unwrap();
     cmd.env("HOME", dir.path());
     cmd.env("XDG_CONFIG_HOME", dir.path().join(".config"));
     cmd.env("XDG_DATA_HOME", dir.path().join(".local/share"));
@@ -21,7 +21,7 @@ fn cmd_with_home(dir: &TempDir) -> Command {
 
 #[test]
 fn help_lists_core_commands() {
-    let mut cmd = Command::cargo_bin("modeldesk").unwrap();
+    let mut cmd = Command::cargo_bin("modelsd").unwrap();
     cmd.arg("--help");
     let out = cmd.output().unwrap();
     assert!(out.status.success());
@@ -62,7 +62,16 @@ fn providers_json_shape() {
         .iter()
         .filter_map(|r| r.get("id").and_then(|v| v.as_str()))
         .collect();
-    for expected in ["mlx-dspark", "mlx-lm", "llama-cpp", "ollama"] {
+    for expected in [
+        "mlx-dspark",
+        "mlx-lm",
+        "llama-cpp",
+        "ollama",
+        "strata",
+        "mistral-rs",
+        "vllm",
+        "sglang",
+    ] {
         assert!(ids.contains(&expected), "missing provider {expected}");
     }
 }
@@ -175,7 +184,7 @@ fn outdated_command_lists_backends() {
 
 #[test]
 fn version_compare_orders_correctly() {
-    assert!(modeldesk::providers::version_meets("0.20.3", (0, 17, 0)));
-    assert!(!modeldesk::providers::version_meets("0.16.9", (0, 17, 0)));
-    assert!(modeldesk::providers::version_meets("1.0.0", (0, 99, 99)));
+    assert!(modelsdesk::providers::version_meets("0.20.3", (0, 17, 0)));
+    assert!(!modelsdesk::providers::version_meets("0.16.9", (0, 17, 0)));
+    assert!(modelsdesk::providers::version_meets("1.0.0", (0, 99, 99)));
 }

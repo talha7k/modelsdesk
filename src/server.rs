@@ -30,6 +30,11 @@ fn is_provider_cmd(cmd: &str) -> bool {
         || cmd.contains("mlx_lm.server")
         || cmd.contains("llama-server")
         || cmd.contains("ollama")
+        || cmd.contains("strata")
+        || cmd.contains("mistralrs")
+        || cmd.contains("sglang.launch_server")
+        || cmd.contains("lms")
+        || cmd.contains("vllm")
 }
 
 /// Pids listening on a port via lsof (sysinfo misses hardened macOS processes).

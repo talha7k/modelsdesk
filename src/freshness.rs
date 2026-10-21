@@ -254,6 +254,10 @@ pub async fn backend_latest(backend: &str) -> Option<String> {
             }
             github_latest("ollama/ollama").await.ok()?
         }
+        "strata" => github_latest("Niko1221/Strata").await.ok()?,
+        "mistral-rs" => github_latest("EricLBuehler/mistral.rs").await.ok()?,
+        "vllm" => github_latest("vllm-project/vllm").await.ok()?,
+        "sglang" => github_latest("sgl-project/sglang").await.ok()?,
         _ => None,
     }
 }
@@ -264,6 +268,10 @@ pub fn update_command(backend: &str) -> Option<String> {
         "mlx-lm" => Some("brew upgrade mlx-lm".to_string()),
         "llama-cpp" => Some("brew upgrade llama.cpp".to_string()),
         "ollama" => Some("brew upgrade ollama".to_string()),
+        "strata" => Some("strata update".to_string()),
+        "mistral-rs" => Some("curl -fsSL https://mistralrs.dev/install.sh | sh # re-run to update".to_string()),
+        "vllm" => Some("pip install -U vllm".to_string()),
+        "sglang" => Some("pip install -U sglang".to_string()),
         _ => None,
     }
 }

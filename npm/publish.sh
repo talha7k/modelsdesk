@@ -9,9 +9,10 @@ cd "$(dirname "$0")"
 VERSION="$(node -p "require('./package.json').version")"
 echo "modelsdesk npm publish v$VERSION"
 
-# 1. Stage skills into the tarball (source of truth: repo root skills/)
+# 1. Stage skills + CHANGELOG into the tarball (source of truth: repo root)
 rm -rf ./skills
 cp -r ../skills ./skills
+cp ../CHANGELOG.md ./CHANGELOG.md 2>/dev/null || true
 
 # 2. Stage the release binary into each platform package
 cargo build --release --manifest-path ../Cargo.toml
@@ -29,5 +30,5 @@ echo "--- publishing root"
 npm publish --access public .
 
 # 5. Clean staged artifacts (binaries + skills copy never committed)
-rm -rf ./skills ./platforms/*/bin/modelsd
+rm -rf ./skills ./CHANGELOG.md ./platforms/*/bin/modelsd
 echo "done: modelsdesk@$VERSION"

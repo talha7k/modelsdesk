@@ -83,10 +83,11 @@ llama.cpp download into `~/.cache/modeldesk/gguf/` (Q4_K_M preferred).
 
 ## Agent integrations
 
-`modelsd connect <jcode|codex|opencode>` writes the active server into the
+`modelsd connect <jcode|codex|opencode|zed>` writes the active server into the
 agent's config (OpenAI-compatible provider + default model). `--list` shows
 agents + config paths, `--dry-run` prints without writing. Restart the agent
-afterwards to pick it up.
+afterwards to pick it up. Cursor is unsupported (no file config; requests
+route through api2.cursor.sh so localhost is unreachable).
 
 ## Profiles (stored model configs)
 

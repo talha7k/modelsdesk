@@ -8,6 +8,7 @@ fn ep() -> Endpoint {
         base_url: "http://127.0.0.1:8090/v1".to_string(),
         model_id: "lfm-2.5-8b".to_string(),
         model_name: "LiquidAI/LFM2.5-8B-A1B-MLX-4bit".to_string(),
+        prompt: None,
     }
 }
 
@@ -24,8 +25,13 @@ fn agent_registry() {
     assert!(connect::supported("jcode"));
     assert!(connect::supported("codex"));
     assert!(connect::supported("opencode"));
+    assert!(connect::supported("zed"));
+    assert!(!connect::supported("cursor")); // documented as unsupported
     assert!(!connect::supported("lm-studio"));
-    assert_eq!(AGENTS, &["jcode", "codex", "opencode"]);
+    assert_eq!(AGENTS, &["jcode", "codex", "opencode", "zed"]);
+    // Cursor gets a specific explanation, not a generic unknown-agent error.
+    let err = connect::config_path_for("cursor").unwrap_err().to_string();
+    assert!(err.contains("not supported"), "cursor error: {err}");
 }
 
 #[test]
@@ -36,24 +42,38 @@ fn jcode_writer_creates_and_preserves() {
     connect::write_jcode(&path, &ep()).unwrap();
     let raw = std::fs::read_to_string(&path).unwrap();
     let doc: toml::Value = raw.parse().unwrap();
+    // Shape must match `jcode provider add --no-api-key` exactly.
+    assert_eq!(
+        doc["providers"]["modelsdesk"]["type"].as_str().unwrap(),
+        "openai-compatible"
+    );
     assert_eq!(
         doc["providers"]["modelsdesk"]["base_url"]
             .as_str()
             .unwrap(),
         "http://127.0.0.1:8090/v1"
     );
-    assert!(doc["providers"]["modelsdesk"]["no_api_key"].as_bool().unwrap());
     assert_eq!(
-        doc["providers"]["modelsdesk"]["models"]["lfm-2.5-8b"]["name"]
+        doc["providers"]["modelsdesk"]["auth"].as_str().unwrap(),
+        "none"
+    );
+    assert!(!doc["providers"]["modelsdesk"]["requires_api_key"]
+        .as_bool()
+        .unwrap());
+    assert_eq!(
+        doc["providers"]["modelsdesk"]["models"][0]["id"]
             .as_str()
             .unwrap(),
-        "LiquidAI/LFM2.5-8B-A1B-MLX-4bit"
+        "lfm-2.5-8b"
     );
     assert_eq!(
         doc["provider"]["default_provider"].as_str().unwrap(),
         "modelsdesk"
     );
-    assert_eq!(doc["provider"]["model"].as_str().unwrap(), "lfm-2.5-8b");
+    assert_eq!(
+        doc["provider"]["default_model"].as_str().unwrap(),
+        "lfm-2.5-8b"
+    );
 
     // Pre-existing unrelated config must survive an idempotent re-run.
     let raw2 = format!(
@@ -130,11 +150,22 @@ fn opencode_writer_creates_and_preserves() {
         "LiquidAI/LFM2.5-8B-A1B-MLX-4bit"
     );
     assert_eq!(doc["model"].as_str().unwrap(), "modelsdesk/lfm-2.5-8b");
+    // Lean local agent with a prompt, set as default.
+    assert!(doc["agent"]["modelsdesk-local"]["prompt"].is_string());
+    assert_eq!(
+        doc["agent"]["modelsdesk-local"]["model"].as_str().unwrap(),
+        "modelsdesk/lfm-2.5-8b"
+    );
+    assert_eq!(
+        doc["default_agent"].as_str().unwrap(),
+        "modelsdesk-local"
+    );
 
-    // Unrelated provider + top-level keys survive re-run.
+    // Unrelated provider + top-level keys + agents survive re-run.
     let mut doc2 = doc.clone();
     doc2["provider"]["ollama"] = serde_json::json!({"npm": "@ai-sdk/openai-compatible"});
     doc2["theme"] = serde_json::json!("dark");
+    doc2["agent"]["explore"] = serde_json::json!({"model": "zai/x", "prompt": "p"});
     std::fs::write(&path, serde_json::to_string(&doc2).unwrap()).unwrap();
     connect::write_opencode(&path, &ep()).unwrap();
     let doc3: serde_json::Value =
@@ -142,10 +173,48 @@ fn opencode_writer_creates_and_preserves() {
     assert!(doc3["provider"]["ollama"].is_object());
     assert_eq!(doc3["theme"].as_str().unwrap(), "dark");
     assert!(doc3["provider"]["modelsdesk"].is_object());
+    // Pre-existing agents (explore etc.) survive.
+    assert!(doc3["agent"]["explore"].is_object());
+    assert!(doc3["agent"]["modelsdesk-local"].is_object());
 }
 
 #[test]
 fn unknown_agent_rejected() {
     assert!(connect::config_path_for("vim").is_err());
     assert!(connect::write_for("vim", std::path::Path::new("/tmp/x"), &ep()).is_err());
+}
+
+#[test]
+fn zed_writer_creates_and_preserves() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+
+    connect::write_zed(&path, &ep()).unwrap();
+    let doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let md = &doc["language_models"]["openai_compatible"]["modelsdesk"];
+    assert_eq!(md["api_url"].as_str().unwrap(), "http://127.0.0.1:8090/v1");
+    assert_eq!(
+        md["available_models"][0]["name"].as_str().unwrap(),
+        "lfm-2.5-8b"
+    );
+    assert_eq!(
+        md["available_models"][0]["capabilities"]["chat_completions"]
+            .as_bool()
+            .unwrap(),
+        true
+    );
+
+    // JSONC comments + unrelated keys survive re-run.
+    let raw = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        format!("{{ // zed settings\n\"theme\": \"dark\", \"rest\": {raw} }}"),
+    )
+    .unwrap();
+    connect::write_zed(&path, &ep()).unwrap();
+    let doc2: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(doc2["theme"].as_str().unwrap(), "dark");
+    assert!(doc2["rest"]["language_models"]["openai_compatible"]["modelsdesk"].is_object());
 }

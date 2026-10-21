@@ -258,6 +258,9 @@ fn run_connect(agent: Option<&str>, list: bool, dry_run: bool) -> Result<()> {
             let state = if path.exists() { "" } else { " (not installed?)" };
             println!("  {a:<10} {}{}", output::dim(&path.display().to_string()), output::dim(state));
         }
+        for (name, why) in connect::UNSUPPORTED {
+            println!("  {name:<10} {}", output::dim(why));
+        }
         if agent.is_none() && !list {
             anyhow::bail!("pass an agent: `modelsdesk connect <jcode|codex|opencode>`");
         }

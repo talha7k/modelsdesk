@@ -10,10 +10,13 @@ semver.
 
 - `modelsdesk connect <agent>`: write the active local server into coding-agent
   configs — `jcode` (~/.jcode/config.toml provider profile), `codex`
-  (~/.codex/config.toml model_providers with wire_api = "responses"), and
-  `opencode` (~/.config/opencode/opencode.json custom provider). Idempotent,
-  preserves unrelated config, `--dry-run` and `--list` supported. This is the
-  0.3.0 agent-integration feature.
+  (~/.codex/config.toml model_providers with wire_api = "responses"),
+  `opencode` (~/.config/opencode/opencode.json custom provider + lean
+  local-model agent), and `zed` (~/.config/zed/settings.json openai_compatible
+  entry). Cursor is documented as unsupported (routes via api2.cursor.sh, no
+  file-based config, localhost unreachable). Idempotent, preserves unrelated
+  config, `--dry-run` and `--list` supported. Live-tested against jcode
+  (round-trip ok) and opencode/zed (config accepted).
 
 ## [0.2.1] - 2026-10-21
 

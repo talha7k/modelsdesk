@@ -303,7 +303,7 @@ pub enum Commands {
             modelsdesk connect --list"
     )]
     Connect {
-        #[arg(help = "Agent: jcode, codex, opencode")]
+        #[arg(help = "Agent: jcode, codex, opencode, zed")]
         agent: Option<String>,
         #[arg(long, help = "List supported agents and their config paths")]
         list: bool,

@@ -29,6 +29,10 @@ rm -f Cargo.toml.bak
 for pkg in npm/package.json npm/platforms/darwin-arm64/package.json; do
   jq -M --arg v "$VERSION" '.version = $v' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
 done
+# Keep the platform pin in lockstep with the root version.
+jq -M --arg v "$VERSION" \
+  '.optionalDependencies["@modelsdesk/darwin-arm64"] = $v' \
+  npm/package.json > npm/package.json.tmp && mv npm/package.json.tmp npm/package.json
 
 # 2. Commit + tag
 echo "— committing"

@@ -6,7 +6,7 @@ semver.
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-21
+## [0.2.1] - 2026-10-21
 
 ### Added
 
@@ -21,6 +21,9 @@ semver.
 ### Fixed
 
 - Test suite compiles again (wrong crate/binary names) — 9/9 pass.
+- `release.sh` now bumps the `@modelsdesk/darwin-arm64` optionalDependency
+  pin alongside the root version (0.2.0 shipped a stale 0.1.0 platform
+  binary for this reason).
 
 ### Planned (0.3.0)
 

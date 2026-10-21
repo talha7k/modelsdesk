@@ -7,6 +7,45 @@ use crate::providers::Provider;
 
 pub struct MlxDspark;
 
+/// Known target → DSpark/DFlash drafter pairs (verified via `mlx-dspark
+/// models`). Targets are quantization-agnostic: the repo prefix matches, any
+/// quant of the same model gets the same drafter.
+pub const KNOWN_DRAFTERS: &[(&str, &str, &str)] = &[
+    // (target repo prefix, DSpark drafter, DFlash drafter or "")
+    ("mlx-community/Qwen3-4B", "deepseek-ai/dspark_qwen3_4b_block7", "z-lab/Qwen3-4B-DFlash-b16"),
+    ("mlx-community/Qwen3-8B", "deepseek-ai/dspark_qwen3_8b_block7", "z-lab/Qwen3-8B-DFlash-b16"),
+    ("mlx-community/Qwen3-14B", "deepseek-ai/dspark_qwen3_14b_block7", ""),
+    ("mlx-community/gemma-4-12B-it", "deepseek-ai/dspark_gemma4_12b_block7", "z-lab/gemma4-12B-it-DFlash"),
+    ("prism-ml/Ternary-Bonsai-27B-mlx", "Rahim/Ternary-Bonsai-27B-dspark", ""),
+    ("mlx-community/Qwen3.6-27B", "satgeze/Qwen3.6-27B-DSpark", ""),
+    ("mlx-community/Ornith-1.0-9B", "stanleyphoong/Ornith-1.0-9B-DSpark", ""),
+    ("mlx-community/Qwen3.6-35B-A3B", "Koopah/Qwen3.6-35B-A3B-NVFP4-DSPARK", ""),
+    ("mlx-community/Qwen3.8-27B", "RedHatAI/Qwen3.8-27B-speculator.dspark", "incoai/Qwen3.8-27B-DFlash2"),
+    ("mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B", "mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-DSpark-bf16", ""),
+    ("mlx-community/Muse-Glimmer-30B", "DaoCloud/Muse-Glimmer-30B-DSpark", ""),
+    ("LiquidAI/LFM2.5-2.6B-MLX", "LiquidAI/LFM2.5-2.6B-DSpark", ""),
+    ("LiquidAI/LFM2.5-1.2B-Instruct-MLX", "LiquidAI/LFM2.5-1.2B-Instruct-DSpark", ""),
+    ("LiquidAI/LFM2.5-8B-A1B-MLX", "LiquidAI/LFM2.5-8B-A1B-DSpark", ""),
+    ("openbmb/MiniCPM5-2B-MLX", "openbmb/MiniCPM5-2B-DSpark", ""),
+    ("openbmb/MiniCPM-V-4.7-1B", "openbmb/MiniCPM-V-4.7-1B-DSpark", ""),
+    ("openbmb/MiniCPM-V-4.7-35B-A3B", "openbmb/MiniCPM-V-4.7-35B-A3B-DSpark", ""),
+];
+
+/// Resolve the drafter for a target repo in the requested mode. Returns
+/// (drafter, effective_mode): when no DSpark/DFlash head exists, falls back
+/// to drafter-free lookup mode so ANY repo still gets some speculation.
+pub fn resolve_drafter(repo: &str, mode: &str) -> (Option<String>, String) {
+    let hit = KNOWN_DRAFTERS.iter().find(|(t, _, _)| repo.starts_with(t));
+    match (mode, hit) {
+        ("dflash", Some((_, _, df))) if !df.is_empty() => {
+            (Some(df.to_string()), "dflash".to_string())
+        }
+        ("dflash", _) => (None, "lookup".to_string()), // no DFlash head → lookup
+        (_, Some((_, ds, _))) => (Some(ds.to_string()), mode.to_string()),
+        _ => (None, "lookup".to_string()), // unknown target → drafter-free
+    }
+}
+
 fn candidate_bins() -> Vec<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     vec![
@@ -38,12 +77,20 @@ impl Provider for MlxDspark {
     }
 
     fn start_args(&self, entry: &ModelEntry, host: &str, port: u16) -> Result<Vec<String>> {
+        let mode = entry.mode.clone().unwrap_or_else(|| "dspark".to_string());
+        // Auto-resolve the drafter when unset; fall back sensibly per mode.
+        let (drafter, mode) = match (&entry.drafter, mode.as_str()) {
+            (Some(d), m) => (Some(d.clone()), m.to_string()),
+            (None, "baseline") => (None, "baseline".to_string()),
+            (None, "lookup") => (None, "lookup".to_string()),
+            (None, m) => resolve_drafter(&entry.repo, m),
+        };
         let mut args = vec![
             "serve".to_string(),
             "--model".to_string(),
             entry.repo.clone(),
             "--mode".to_string(),
-            entry.mode.clone().unwrap_or_else(|| "dspark".to_string()),
+            mode.clone(),
             "--drafter-bits".to_string(),
             "4".to_string(),
             "--kv-bits".to_string(),
@@ -53,9 +100,9 @@ impl Provider for MlxDspark {
             "--port".to_string(),
             port.to_string(),
         ];
-        if let Some(drafter) = &entry.drafter {
+        if let Some(d) = drafter {
             args.push("--drafter".to_string());
-            args.push(drafter.clone());
+            args.push(d);
         }
         if let Some(ctx) = entry.context_window {
             args.push("--context-window".to_string());

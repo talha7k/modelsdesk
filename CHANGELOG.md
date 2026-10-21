@@ -6,7 +6,24 @@ semver.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
 ### Added
+
+- Speculative decoding across all engine providers:
+  - `mlx-dspark`: drafter auto-resolution — 17 known target→DSpark/DFlash
+    drafter pairs embedded (verified against `mlx-dspark models`); profiles
+    without a `drafter` now get one automatically (any quant variant
+    matches by repo prefix), unknown targets fall back to drafter-free
+    `lookup` mode, `mode = "dflash"` picks the DFlash head when one exists
+  - `llama-cpp`: profile `drafter` now enables EAGLE-style speculative
+    decoding via llama-server `--model-draft` (local .gguf draft models;
+    clear error if the draft isn't a local file)
+  - `vllm`: profile `drafter` + `mode` map to `--speculative-config`
+    (eagle3 default; dspark/dflash/mtp/ngram supported, ngram is
+    drafter-free)
+- Live-verified: MiniCPM5-2B with auto-resolved DSpark head boots and
+  serves without any drafter field on the profile.
 
 - `modelsdesk connect <agent>`: write the active local server into coding-agent
   configs — `jcode` (~/.jcode/config.toml provider profile), `codex`

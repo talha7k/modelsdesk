@@ -43,6 +43,21 @@ impl Provider for Vllm {
             args.push("--max-model-len".to_string());
             args.push(ctx.to_string());
         }
+        // Speculative decoding: profile `drafter` (draft model path/repo) and
+        // optional `mode` (eagle3|dspark|dflash|mtp|ngram) map to vLLM's
+        // --speculative-config JSON. Default method is eagle3 (most mature).
+        if let Some(draft) = &entry.drafter {
+            let method = entry.mode.clone().unwrap_or_else(|| "eagle3".to_string());
+            let mut spec = serde_json::json!({
+                "method": method,
+                "model": draft,
+            });
+            if method == "ngram" {
+                spec = serde_json::json!({ "method": "ngram", "prompt_lookup_max": 10 });
+            }
+            args.push("--speculative-config".to_string());
+            args.push(spec.to_string());
+        }
         Ok(args)
     }
 

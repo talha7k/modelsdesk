@@ -75,6 +75,22 @@ impl Provider for LlamaCpp {
             args.push("--ctx-size".to_string());
             args.push(ctx.to_string());
         }
+        // Speculative decoding (EAGLE-style): a draft model on the profile
+        // enables llama-server's -md path. Local .gguf paths pass through
+        // directly; HF repos are resolved+downloaded in fetch_weights.
+        if let Some(draft) = &entry.drafter {
+            let draft_path = shellexpand(draft);
+            if PathBuf::from(&draft_path).is_file() {
+                args.push("--model-draft".to_string());
+                args.push(draft_path);
+                args.push("--draft-max".to_string());
+                args.push("16".to_string());
+            } else {
+                anyhow::bail!(
+                    "draft model '{draft}' is not a local .gguf path — download it first (llama-server needs a file for --model-draft)"
+                );
+            }
+        }
         Ok(args)
     }
 

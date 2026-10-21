@@ -15,7 +15,8 @@ cp -r ../skills ./skills
 cp ../CHANGELOG.md ./CHANGELOG.md 2>/dev/null || true
 
 # 2. Stage the release binary into each platform package
-cargo build --release --manifest-path ../Cargo.toml
+# (cd to the repo root so target/ lands where the cp expects it)
+(cd .. && cargo build --release)
 mkdir -p ./platforms/darwin-arm64/bin
 cp ../target/release/modelsd ./platforms/darwin-arm64/bin/modelsd
 

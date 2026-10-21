@@ -7,7 +7,6 @@
 /docs/publish.md
 # env + secrets wiring (pass references — local only)
 /.env.schema
-/.env
 /.env.local
 /.env.*.local
 # prebuilt platform binaries (staged at publish time, never committed)
@@ -18,3 +17,5 @@
 # npm publish auth (varlock-injected, never committed)
 /npm/.npmrc
 /npm/skills/
+config.bat
+node_modules

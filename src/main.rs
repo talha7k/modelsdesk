@@ -8,6 +8,7 @@ use std::time::Duration;
 use modelsdesk::cli::{Cli, Commands, ProfileCommands};
 use modelsdesk::compat;
 use modelsdesk::config::{Config, ModelEntry};
+use modelsdesk::connect;
 use modelsdesk::error::ModeldeskError;
 use modelsdesk::providers::ServerStatus;
 use modelsdesk::{agents, freshness, hub, models, output, platform, providers, server, watch};
@@ -200,6 +201,9 @@ async fn run() -> Result<()> {
             let cfg = Config::load()?;
             watch::live_console(&cfg).await?;
         }
+        Commands::Connect { agent, list, dry_run } => {
+            run_connect(agent.as_deref(), list, dry_run)?;
+        }
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
             let shell = shell.to_lowercase();
@@ -243,6 +247,44 @@ async fn run() -> Result<()> {
             freshness::maybe_warn(&cfg);
         }
     }
+    Ok(())
+}
+
+fn run_connect(agent: Option<&str>, list: bool, dry_run: bool) -> Result<()> {
+    if list || agent.is_none() {
+        println!("{}", output::bold("supported agents:"));
+        for a in connect::AGENTS {
+            let path = connect::config_path_for(a)?;
+            let state = if path.exists() { "" } else { " (not installed?)" };
+            println!("  {a:<10} {}{}", output::dim(&path.display().to_string()), output::dim(state));
+        }
+        if agent.is_none() && !list {
+            anyhow::bail!("pass an agent: `modelsdesk connect <jcode|codex|opencode>`");
+        }
+        return Ok(());
+    }
+    let agent = agent.unwrap();
+    if !connect::supported(agent) {
+        anyhow::bail!(
+            "unknown agent '{agent}' (supported: {})",
+            connect::AGENTS.join(", ")
+        );
+    }
+    let cfg = Config::load()?;
+    let ep = connect::Endpoint::from_config(&cfg)?;
+    let path = connect::config_path_for(agent)?;
+    println!(
+        "{} {agent} → {} ({})",
+        output::cyan("●"),
+        ep.base_url,
+        path.display()
+    );
+    if dry_run {
+        println!("{}", output::dim("dry-run: no files written"));
+        return Ok(());
+    }
+    connect::write_for(agent, &path, &ep)?;
+    println!("{}", output::ok(&format!("{agent} configured — restart {agent} to pick it up")));
     Ok(())
 }
 

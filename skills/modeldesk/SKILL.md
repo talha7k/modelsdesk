@@ -81,6 +81,13 @@ backend install status, RAM estimate vs this machine, and cache state.
 ≥0.17, llama.cpp ≥b5000); older backends warn but still run. GGUF weights for
 llama.cpp download into `~/.cache/modeldesk/gguf/` (Q4_K_M preferred).
 
+## Agent integrations
+
+`modelsd connect <jcode|codex|opencode>` writes the active server into the
+agent's config (OpenAI-compatible provider + default model). `--list` shows
+agents + config paths, `--dry-run` prints without writing. Restart the agent
+afterwards to pick it up.
+
 ## Profiles (stored model configs)
 
 Profiles live in `config.toml` (see `modelsd profile list` for the path).

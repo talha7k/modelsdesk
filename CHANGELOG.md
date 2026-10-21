@@ -6,6 +6,15 @@ semver.
 
 ## [Unreleased]
 
+### Added
+
+- `modelsdesk connect <agent>`: write the active local server into coding-agent
+  configs — `jcode` (~/.jcode/config.toml provider profile), `codex`
+  (~/.codex/config.toml model_providers with wire_api = "responses"), and
+  `opencode` (~/.config/opencode/opencode.json custom provider). Idempotent,
+  preserves unrelated config, `--dry-run` and `--list` supported. This is the
+  0.3.0 agent-integration feature.
+
 ## [0.2.1] - 2026-10-21
 
 ### Added

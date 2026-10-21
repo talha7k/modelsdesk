@@ -2,6 +2,7 @@ pub mod agents;
 pub mod cli;
 pub mod compat;
 pub mod config;
+pub mod connect;
 pub mod error;
 pub mod freshness;
 pub mod health;

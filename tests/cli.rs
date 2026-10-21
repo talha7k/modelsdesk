@@ -188,3 +188,54 @@ fn version_compare_orders_correctly() {
     assert!(!modelsdesk::providers::version_meets("0.16.9", (0, 17, 0)));
     assert!(modelsdesk::providers::version_meets("1.0.0", (0, 99, 99)));
 }
+
+#[test]
+fn connect_lists_agents_and_rejects_unknown() {
+    let dir = isolated_home();
+    let mut cmd = cmd_with_home(&dir);
+    cmd.args(["connect", "--list"]);
+    let out = cmd.output().unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    for agent in ["jcode", "codex", "opencode"] {
+        assert!(text.contains(agent), "connect --list missing '{agent}'");
+    }
+
+    let mut cmd = cmd_with_home(&dir);
+    cmd.args(["connect", "vim"]);
+    let out = cmd.output().unwrap();
+    assert!(!out.status.success(), "connect vim must fail");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("unknown agent"), "stderr: {err}");
+}
+
+#[test]
+fn connect_jcode_writes_into_isolated_home() {
+    let dir = isolated_home();
+    let mut cmd = cmd_with_home(&dir);
+    cmd.args(["connect", "jcode"]);
+    let out = cmd.output().unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let cfg_path = dir.path().join(".jcode/config.toml");
+    assert!(cfg_path.exists(), "jcode config not written");
+    let doc: toml::Value = std::fs::read_to_string(&cfg_path).unwrap().parse().unwrap();
+    assert_eq!(
+        doc["providers"]["modelsdesk"]["base_url"].as_str().unwrap(),
+        "http://127.0.0.1:8090/v1"
+    );
+}
+
+#[test]
+fn connect_dry_run_writes_nothing() {
+    let dir = isolated_home();
+    let mut cmd = cmd_with_home(&dir);
+    cmd.args(["connect", "opencode", "--dry-run"]);
+    let out = cmd.output().unwrap();
+    assert!(out.status.success());
+    let cfg_path = dir.path().join(".config/opencode/opencode.json");
+    assert!(!cfg_path.exists(), "dry-run must not write config");
+}

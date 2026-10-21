@@ -291,6 +291,26 @@ pub enum Commands {
     )]
     Watch,
     #[command(
+        about = "Write the active server into a coding agent's config",
+        long_about = "Point a coding agent at the local modelsdesk server.\n\
+            Writes an OpenAI-compatible provider entry for the active\n\
+            profile and sets it as the agent's default model. Idempotent:\n\
+            re-running updates the entry, other config is left alone.",
+        after_help = "EXAMPLES:\n    \
+            modelsdesk connect jcode\n    \
+            modelsdesk connect codex\n    \
+            modelsdesk connect opencode\n    \
+            modelsdesk connect --list"
+    )]
+    Connect {
+        #[arg(help = "Agent: jcode, codex, opencode")]
+        agent: Option<String>,
+        #[arg(long, help = "List supported agents and their config paths")]
+        list: bool,
+        #[arg(long, help = "Show what would be written, don't touch files")]
+        dry_run: bool,
+    },
+    #[command(
         about = "Print shell completions",
         after_help = "EXAMPLES:\n    \
             modelsdesk completions zsh > ~/.zsh/completions/_modelsdesk"

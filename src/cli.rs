@@ -130,7 +130,7 @@ pub enum Commands {
             long,
             help = "Provider backend for this model",
             long_help = "Pin the backend: mlx-dspark, mlx-lm, llama-cpp, ollama, strata,\n\
-                mistral-rs, vllm, sglang. Without it, GGUF paths default to\n\
+                mistral-rs, vllm, sglang, tabby. Without it, GGUF paths default to\n\
                 llama-cpp, everything else\n\
                 to mlx-dspark. Stored on the profile for next time."
         )]
@@ -300,10 +300,12 @@ pub enum Commands {
             modelsdesk connect jcode\n    \
             modelsdesk connect codex\n    \
             modelsdesk connect opencode\n    \
+            modelsdesk connect zed\n    \
+            modelsdesk connect cline\n    \
             modelsdesk connect --list"
     )]
     Connect {
-        #[arg(help = "Agent: jcode, codex, opencode, zed")]
+        #[arg(help = "Agent: jcode, codex, opencode, zed, goose, aider, cline, crush, continue")]
         agent: Option<String>,
         #[arg(long, help = "List supported agents and their config paths")]
         list: bool,

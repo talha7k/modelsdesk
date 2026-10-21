@@ -26,9 +26,18 @@ fn agent_registry() {
     assert!(connect::supported("codex"));
     assert!(connect::supported("opencode"));
     assert!(connect::supported("zed"));
+    assert!(connect::supported("goose"));
+    assert!(connect::supported("aider"));
+    assert!(connect::supported("cline"));
+    assert!(connect::supported("crush"));
+    assert!(connect::supported("continue"));
     assert!(!connect::supported("cursor")); // documented as unsupported
+    assert!(!connect::supported("avante")); // inline Lua, unsafe to rewrite
     assert!(!connect::supported("lm-studio"));
-    assert_eq!(AGENTS, &["jcode", "codex", "opencode", "zed"]);
+    assert_eq!(
+        AGENTS,
+        &["jcode", "codex", "opencode", "zed", "goose", "aider", "cline", "crush", "continue"]
+    );
     // Cursor gets a specific explanation, not a generic unknown-agent error.
     let err = connect::config_path_for("cursor").unwrap_err().to_string();
     assert!(err.contains("not supported"), "cursor error: {err}");
@@ -217,4 +226,110 @@ fn zed_writer_creates_and_preserves() {
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(doc2["theme"].as_str().unwrap(), "dark");
     assert!(doc2["rest"]["language_models"]["openai_compatible"]["modelsdesk"].is_object());
+}
+
+#[test]
+fn goose_writer_creates_custom_provider() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("goose/custom_providers/modelsdesk.json");
+
+    connect::write_goose(&path, &ep()).unwrap();
+    let doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(doc["name"].as_str().unwrap(), "modelsdesk");
+    assert_eq!(doc["engine"].as_str().unwrap(), "openai");
+    assert_eq!(
+        doc["base_url"].as_str().unwrap(),
+        "http://127.0.0.1:8090/v1/chat/completions"
+    );
+    assert_eq!(doc["models"][0]["name"].as_str().unwrap(), "lfm-2.5-8b");
+    assert!(!doc["requires_auth"].as_bool().unwrap());
+    assert!(doc["supports_streaming"].as_bool().unwrap());
+}
+
+#[test]
+fn aider_writer_creates_and_is_idempotent() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".aider.conf.yml");
+
+    connect::write_aider(&path, &ep()).unwrap();
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(raw.contains("model: openai/lfm-2.5-8b"), "{raw}");
+    assert!(raw.contains("OPENAI_API_BASE=http://127.0.0.1:8090/v1"), "{raw}");
+
+    // Re-run: no duplicated model lines, prior user settings preserved.
+    std::fs::write(&path, format!("{raw}auto-commits: false\n")).unwrap();
+    connect::write_aider(&path, &ep()).unwrap();
+    let raw2 = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(raw2.matches("model: openai/").count(), 1, "{raw2}");
+    assert!(raw2.contains("auto-commits: false"), "{raw2}");
+}
+
+#[test]
+fn cline_writer_matches_official_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("providers.json");
+
+    connect::write_cline(&path, &ep()).unwrap();
+    let doc: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(doc["lastUsedProvider"].as_str().unwrap(), "openai-native");
+    let s = &doc["providers"]["openai-native"]["settings"];
+    assert_eq!(s["baseUrl"].as_str().unwrap(), "http://127.0.0.1:8090/v1");
+    assert_eq!(s["model"].as_str().unwrap(), "lfm-2.5-8b");
+
+    // Existing provider entries survive.
+    std::fs::write(
+        &path,
+        r#"{"version":1,"providers":{"anthropic":{"settings":{"apiKey":"sk"}}}}"#,
+    )
+    .unwrap();
+    connect::write_cline(&path, &ep()).unwrap();
+    let doc2: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(doc2["providers"]["anthropic"]["settings"]["apiKey"].is_string());
+    assert!(doc2["providers"]["openai-native"].is_object());
+}
+
+#[test]
+fn crush_writer_appends_managed_block() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("crushrc");
+
+    connect::write_crush(&path, &ep()).unwrap();
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(raw.contains("provider add modelsdesk --name modelsdesk --type openai-compat"), "{raw}");
+    assert!(raw.contains("--base-url \"http://127.0.0.1:8090/v1\""), "{raw}");
+
+    // Re-run: user lines kept, managed block not duplicated.
+    std::fs::write(&path, format!("{raw}permissions allow view\n")).unwrap();
+    connect::write_crush(&path, &ep()).unwrap();
+    let raw2 = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(raw2.matches("provider add modelsdesk").count(), 1, "{raw2}");
+    assert!(raw2.contains("permissions allow view"), "{raw2}");
+}
+
+#[test]
+fn continue_writer_inserts_into_models_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+
+    connect::write_continue(&path, &ep()).unwrap();
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(raw.contains("apiBase: http://127.0.0.1:8090/v1"), "{raw}");
+    assert!(raw.contains("models:"), "{raw}");
+
+    // Pre-existing config with other models: entry added, existing kept.
+    std::fs::write(
+        &path,
+        "name: x\nversion: 1.0.0\nschema: v1\nmodels:\n  - name: GPT\n    provider: openai\n    model: gpt-4\n",
+    )
+    .unwrap();
+    connect::write_continue(&path, &ep()).unwrap();
+    let raw2 = std::fs::read_to_string(&path).unwrap();
+    assert!(raw2.contains("name: GPT"), "{raw2}");
+    assert!(raw2.contains("apiBase: http://127.0.0.1:8090/v1"), "{raw2}");
+    assert_eq!(raw2.matches("apiBase:").count(), 1, "{raw2}");
+    // still-valid YAML
+    let _: serde_yaml::Value = serde_yaml::from_str(&raw2).unwrap();
 }

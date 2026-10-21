@@ -1280,6 +1280,7 @@ fn provider_platforms(id: &str) -> Vec<&'static str> {
         }
         "vllm" => vec!["linux", "windows"],
         "sglang" => vec!["linux"],
+        "tabby" => vec!["linux", "windows"],
         _ => vec!["macos"],
     }
 }

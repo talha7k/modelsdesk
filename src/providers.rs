@@ -135,6 +135,7 @@ fn package_version(backend: &str) -> Option<String> {
         "mistral-rs" => None,
         "vllm" => pip_version_pub("vllm"),
         "sglang" => pip_version_pub("sglang"),
+        "tabby" => None, // git-clone install; no package-manager record
         _ => None,
     }
 }
@@ -197,6 +198,7 @@ pub mod vllm;
 pub mod ollama;
 pub mod sglang;
 pub mod strata;
+pub mod tabby;
 
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
@@ -208,6 +210,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(mistral_rs::MistralRs),
         Box::new(vllm::Vllm),
         Box::new(sglang::Sglang),
+        Box::new(tabby::Tabby),
     ]
 }
 

@@ -71,6 +71,7 @@ fn providers_json_shape() {
         "mistral-rs",
         "vllm",
         "sglang",
+        "tabby",
     ] {
         assert!(ids.contains(&expected), "missing provider {expected}");
     }
@@ -197,7 +198,7 @@ fn connect_lists_agents_and_rejects_unknown() {
     let out = cmd.output().unwrap();
     assert!(out.status.success());
     let text = String::from_utf8(out.stdout).unwrap();
-    for agent in ["jcode", "codex", "opencode"] {
+    for agent in ["jcode", "codex", "opencode", "zed", "goose", "aider", "cline", "crush", "continue"] {
         assert!(text.contains(agent), "connect --list missing '{agent}'");
     }
 

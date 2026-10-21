@@ -110,11 +110,14 @@ provider + drafter + tuning (`kv_bits`, `context_window`, `temperature`,
 format/provider/arch/RAM are validated, and a bad profile is rejected with the
 reason, never stored.
 
-**Providers** are a trait (`src/providers.rs`): `mlx-dspark` (speculative
-decoding on Apple Silicon), `mlx-lm` (plain MLX), `llama-cpp` (GGUF,
-cross-platform), `ollama` (managed daemon, cross-platform). Adding a backend
-means implementing eight methods — binary discovery, launch args, health,
-admin hooks, version probe, weight fetch.
+**Providers** are a trait (`src/providers.rs`): `mlx-dspark` (DSpark/DFlash
+speculative decoding on Apple Silicon, drafter auto-resolution), `mlx-lm`
+(plain MLX), `llama-cpp` (GGUF cross-platform, EAGLE draft models), `ollama`
+(managed daemon), `strata` (Rust MoE engine), `mistral-rs` (Rust engine),
+`vllm` + `sglang` (high-throughput Linux/CUDA), `tabby` (TabbyAPI/ExllamaV3
+for consumer GPUs). Adding a backend means implementing eight methods —
+binary discovery, launch args, health, admin hooks, version probe, weight
+fetch.
 
 **Freshness** has two layers: `modeldesk outdated` does a live check of backend
 releases (PyPI / brew livecheck / GitHub releases) and cached-model staleness
@@ -135,17 +138,31 @@ or fails your command.
 
 ## Wiring coding agents
 
-The server speaks OpenAI (`/v1`) and Anthropic (`/v1/messages`) protocols:
+One command writes the active server into any agent's config:
 
-- **OpenCode** (`~/.config/opencode/opencode.json`): an `ai-local`-style
-  provider with `baseURL` → the server and the served model id.
-- **jcode**: `jcode provider add <name> --base-url …/v1 --model <id>
-  --api-key-stdin` (any dummy key — the server ignores auth, but jcode's
-  discovery probe requires the header).
+```
+modeldesk connect jcode     # ~/.jcode/config.toml provider profile
+modeldesk connect codex     # ~/.codex/config.toml (wire_api=responses)
+modeldesk connect opencode  # ~/.config/opencode/opencode.json + lean agent
+modeldesk connect zed       # ~/.config/zed/settings.json
+modeldesk connect cline     # ~/.cline/data/settings/providers.json
+modeldesk connect goose     # ~/.config/goose/custom_providers/*.json
+modeldesk connect crush     # ~/.config/crush/crushrc
+modeldesk connect aider     # ~/.aider.conf.yml
+modeldesk connect continue  # ~/.continue/config.yaml
+```
 
-`modeldesk sync-agents` rewrites both configs to the active profile, and
-`modeldesk use` runs it automatically after every switch — changing models
-never breaks your agents.
+All writers are idempotent and preserve unrelated config. `--list` shows
+config paths; `--dry-run` prints without writing. Cursor can't be automated
+(requests route via api2.cursor.sh, localhost unreachable); avante.nvim
+config is inline Lua — both explain themselves in `connect --list`.
+
+The server also speaks OpenAI (`/v1`) and Anthropic (`/v1/messages`)
+protocols directly for anything else.
+
+`modeldesk sync-agents` rewrites the legacy pair (OpenCode + jcode) to the
+active profile, and `modeldesk use` runs it automatically after every
+switch.
 
 ## Development
 

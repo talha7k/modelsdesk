@@ -119,7 +119,7 @@ impl Env {
     pub fn supports(&self, backend: &str) -> bool {
         match backend {
             "mlx-dspark" | "mlx-lm" => self.supports_mlx(),
-            "llama-cpp" | "ollama" | "strata" | "mistral-rs" | "vllm" | "sglang" => {
+            "llama-cpp" | "ollama" | "strata" | "mistral-rs" | "vllm" | "sglang" | "tabby" => {
                 !matches!(self.os, Os::Unknown)
             }
             _ => false,

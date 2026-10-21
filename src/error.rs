@@ -56,6 +56,7 @@ impl ModeldeskError {
                 "mistral-rs" => "curl -fsSL https://mistralrs.dev/install.sh | sh".to_string(),
                 "vllm" => "pip install vllm".to_string(),
                 "sglang" => "pip install 'sglang[all]'".to_string(),
+                "tabby" => "git clone https://github.com/theroyallab/tabbyAPI && cd tabbyAPI && ./start.sh".to_string(),
                 _ => format!("install the '{provider}' backend"),
             }),
             Self::Incompatible { provider, .. } => Some(

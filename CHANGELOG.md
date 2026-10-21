@@ -6,6 +6,22 @@ semver.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-21
+
+### Added
+
+- Five new `connect` integrations (live-verified schemas):
+  - `cline` — ~/.cline/data/settings/providers.json (exact shape `cline auth
+    --provider openai-native --baseurl` writes; 70k+ star agent)
+  - `crush` — ~/.config/crush/crushrc (Bash `provider add`/`model add`)
+  - `continue` — ~/.continue/config.yaml models entry (comment-preserving)
+  - `goose` — ~/.config/goose/custom_providers/modelsdesk.json custom provider
+  - `aider` — ~/.aider.conf.yml model alias + env instructions
+- `avante` documented as unsupported (config is inline Lua in nvim init;
+    manual instructions in `connect --list`)
+- New engine provider: `tabby` (TabbyAPI / ExllamaV3 — consumer-GPU
+  Linux/Windows, EXL3 quants, draft-model speculative decoding)
+
 ## [0.3.0] - 2026-10-21
 
 ### Added

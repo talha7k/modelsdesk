@@ -46,6 +46,7 @@ pub fn plan(backend: &str, env: &Env) -> Result<InstallPlan> {
         "mistral-rs" => mistral_rs_steps(env)?,
         "vllm" => vllm_steps(env)?,
         "sglang" => sglang_steps(env)?,
+        "tabby" => tabby_steps(env)?,
         _ => anyhow::bail!("unknown backend '{backend}'"),
     };
     Ok(InstallPlan {
@@ -223,6 +224,13 @@ fn sglang_steps(env: &Env) -> Result<Vec<InstallStep>> {
         anyhow::bail!("SGLang targets Linux with CUDA — see https://docs.sglang.ai/start.html");
     }
     anyhow::bail!("install SGLang with pip: `pip install sglang[all]` (needs CUDA) — see https://docs.sglang.ai")
+}
+
+fn tabby_steps(env: &Env) -> Result<Vec<InstallStep>> {
+    if env.os != Os::Linux && env.os != Os::Windows {
+        anyhow::bail!("TabbyAPI needs CUDA/ROCm GPUs — see https://github.com/theroyallab/tabbyAPI (git clone + ./start.sh)");
+    }
+    anyhow::bail!("install TabbyAPI manually: git clone https://github.com/theroyallab/tabbyAPI && cd tabbyAPI && ./start.sh (needs CUDA/ROCm)")
 }
 
 pub fn run_plan(plan: &InstallPlan) -> Result<()> {

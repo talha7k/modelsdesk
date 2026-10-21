@@ -44,8 +44,8 @@ pub fn provider_accepts(provider: &str, format: ModelFormat, repo: &str) -> Resu
                 Err("raw safetensors need an MLX conversion for mlx backends".to_string())
             }
         }
-        ("llama-cpp" | "ollama" | "strata" | "mistral-rs" | "vllm" | "sglang", ModelFormat::Gguf) => Ok(()),
-        ("mistral-rs" | "vllm" | "sglang", ModelFormat::Safetensors) => Ok(()),
+        ("llama-cpp" | "ollama" | "strata" | "mistral-rs" | "vllm" | "sglang" | "tabby", ModelFormat::Gguf) => Ok(()),
+        ("mistral-rs" | "vllm" | "sglang" | "tabby", ModelFormat::Safetensors) => Ok(()),
         ("strata", _) => Err("strata serves its own model tiers (e.g. q2_0, iq3_s, gyro-s) — use `--provider strata` with a Strata model name".to_string()),
         ("ollama", _) => {
             Err("ollama pulls its own registry names — use `ollama pull <name>` first".to_string())

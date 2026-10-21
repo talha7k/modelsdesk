@@ -41,6 +41,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 assert_cmd = "2"
 tempfile = "3"
+serde_yaml = "0.9"
 
 [profile.release]
 strip = true

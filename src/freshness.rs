@@ -258,6 +258,7 @@ pub async fn backend_latest(backend: &str) -> Option<String> {
         "mistral-rs" => github_latest("EricLBuehler/mistral.rs").await.ok()?,
         "vllm" => github_latest("vllm-project/vllm").await.ok()?,
         "sglang" => github_latest("sgl-project/sglang").await.ok()?,
+        "tabby" => github_latest("theroyallab/tabbyAPI").await.ok()?,
         _ => None,
     }
 }
@@ -272,6 +273,7 @@ pub fn update_command(backend: &str) -> Option<String> {
         "mistral-rs" => Some("curl -fsSL https://mistralrs.dev/install.sh | sh # re-run to update".to_string()),
         "vllm" => Some("pip install -U vllm".to_string()),
         "sglang" => Some("pip install -U sglang".to_string()),
+        "tabby" => Some("git pull in the tabbyAPI checkout".to_string()),
         _ => None,
     }
 }

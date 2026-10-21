@@ -16,13 +16,14 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 
-pub const AGENTS: &[&str] = &["jcode", "codex", "opencode", "zed"];
+pub const AGENTS: &[&str] = &["jcode", "codex", "opencode", "zed", "goose", "aider", "cline", "crush", "continue"];
+// avante omitted: config is inline Lua in the user's nvim init, unsafe to rewrite programmatically.
 
 /// Cursor cannot be configured by file: it routes chat/agent requests through
 /// api2.cursor.sh, so a localhost endpoint is unreachable from it anyway, and
 /// the only override ("Override OpenAI Base URL") lives in the GUI settings,
 /// not on disk.
-pub const UNSUPPORTED: &[(&str, &str)] = &[("cursor", "Cursor routes via api2.cursor.sh and has no file-based provider config; localhost endpoints are unreachable from it")];
+pub const UNSUPPORTED: &[(&str, &str)] = &[("cursor", "Cursor routes via api2.cursor.sh and has no file-based provider config; localhost endpoints are unreachable from it"), ("avante", "avante.nvim config is inline Lua in your nvim init — add provider manually: endpoint + model under providers.openai_compatible")];
 
 pub fn supported(agent: &str) -> bool {
     AGENTS.contains(&agent)
@@ -314,6 +315,261 @@ pub fn write_zed(path: &Path, ep: &Endpoint) -> Result<()> {
     Ok(())
 }
 
+// ---------- goose: ~/.config/goose/custom_providers/modelsdesk.json ----------
+// goose custom provider file (requires_auth false for a local server).
+
+pub fn goose_config_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("XDG_CONFIG_HOME") {
+        return PathBuf::from(dir)
+            .join("goose")
+            .join("custom_providers")
+            .join("modelsdesk.json");
+    }
+    crate::platform::home()
+        .join(".config")
+        .join("goose")
+        .join("custom_providers")
+        .join("modelsdesk.json")
+}
+
+pub fn write_goose(path: &Path, ep: &Endpoint) -> Result<()> {
+    let model_id = ep.model_id.clone();
+    // goose's base_url points at the chat-completions endpoint.
+    let chat_url = format!("{}/chat/completions", ep.base_url);
+    let doc = serde_json::json!({
+        "name": "modelsdesk",
+        "engine": "openai",
+        "display_name": "modelsdesk (local)",
+        "description": "Local modelsdesk server",
+        "base_url": chat_url,
+        "models": [
+            { "name": model_id, "context_limit": 32768 }
+        ],
+        "supports_streaming": true,
+        "requires_auth": false
+    });
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&doc)?)?;
+    Ok(())
+}
+
+// ---------- aider: ~/.aider.conf.yml ----------
+// aider takes the endpoint from OPENAI_API_BASE env; the conf file sets the
+// model alias (openai/<id>) and documents the needed exports.
+
+pub fn aider_config_path() -> PathBuf {
+    crate::platform::home().join(".aider.conf.yml")
+}
+
+pub fn write_aider(path: &Path, ep: &Endpoint) -> Result<()> {
+    let model = format!("openai/{}", ep.model_id);
+    let managed = format!(
+        "# modelsdesk connect aider — local model config\n\
+         # NOTE: aider needs the endpoint in the environment:\n\
+         #   export OPENAI_API_BASE={}\n\
+         #   export OPENAI_API_KEY=not-needed\n\
+         model: {}\n",
+        ep.base_url, model
+    );
+    if path.exists() {
+        // Idempotent: drop previous managed lines, keep user settings.
+        let existing = std::fs::read_to_string(path)?;
+        let kept: Vec<&str> = existing
+            .lines()
+            .filter(|l| {
+                !l.starts_with("model: openai/")
+                    && !l.contains("modelsdesk connect aider")
+                    && !l.starts_with("# NOTE: aider needs")
+                    && !l.starts_with("#   export OPENAI_API_BASE=")
+                    && !l.starts_with("#   export OPENAI_API_KEY=")
+            })
+            .collect();
+        let mut merged = kept.join("\n");
+        if !merged.is_empty() && !merged.ends_with('\n') {
+            merged.push('\n');
+        }
+        if !merged.is_empty() {
+            merged.push('\n');
+        }
+        merged.push_str(&managed);
+        std::fs::write(path, merged)?;
+    } else {
+        std::fs::write(path, managed)?;
+    }
+    Ok(())
+}
+
+// ---------- cline: ~/.cline/data/settings/providers.json ----------
+// Exact schema `cline auth --provider openai-native --baseurl ...` writes
+// (verified live against @cline/cli 0.0.13).
+
+pub fn cline_config_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("CLINE_DATA_DIR") {
+        return PathBuf::from(dir).join("settings").join("providers.json");
+    }
+    crate::platform::home()
+        .join(".cline")
+        .join("data")
+        .join("settings")
+        .join("providers.json")
+}
+
+pub fn write_cline(path: &Path, ep: &Endpoint) -> Result<()> {
+    let mut doc: Json = if path.exists() {
+        let raw = std::fs::read_to_string(path)?;
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?
+    } else {
+        serde_json::json!({ "version": 1 })
+    };
+    let obj = doc
+        .as_object_mut()
+        .context("cline providers.json root must be an object")?;
+    obj.entry("version".to_string())
+        .or_insert_with(|| serde_json::json!(1));
+    obj.insert(
+        "lastUsedProvider".to_string(),
+        serde_json::json!("openai-native"),
+    );
+    let providers = obj
+        .entry("providers".to_string())
+        .or_insert_with(|| Json::Object(serde_json::Map::new()));
+    let pobj = providers
+        .as_object_mut()
+        .context("\"providers\" must be an object in cline providers.json")?;
+    pobj.insert(
+        "openai-native".to_string(),
+        serde_json::json!({
+            "settings": {
+                "provider": "openai-native",
+                "apiKey": "modelsdesk-local",
+                "model": ep.model_id,
+                "baseUrl": ep.base_url
+            },
+            "tokenSource": "manual"
+        }),
+    );
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(&doc)?)?;
+    Ok(())
+}
+
+// ---------- crush: ~/.config/crush/crushrc ----------
+// crushrc is Bash with builtins; provider add + model add lines (idempotent
+// marker comment).
+
+pub fn crush_config_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("XDG_CONFIG_HOME") {
+        return PathBuf::from(dir).join("crush").join("crushrc");
+    }
+    crate::platform::home().join(".config").join("crush").join("crushrc")
+}
+
+pub fn write_crush(path: &Path, ep: &Endpoint) -> Result<()> {
+    let managed = format!(
+        "# modelsdesk connect crush — local provider\n\
+         provider add modelsdesk --name modelsdesk --type openai-compat --base-url \"{}\"\n\
+         model add modelsdesk/{} --name \"{}\" --context-window 32768\n",
+        ep.base_url, ep.model_id, ep.model_name
+    );
+    let mut out = String::new();
+    if path.exists() {
+        // Drop previous managed block, keep user config.
+        let existing = std::fs::read_to_string(path)?;
+        let mut in_block = false;
+        for line in existing.lines() {
+            if line.contains("modelsdesk connect crush") {
+                in_block = true;
+                continue;
+            }
+            if in_block && (line.trim_start().starts_with("provider add modelsdesk")
+                || line.trim_start().starts_with("model add modelsdesk"))
+            {
+                continue;
+            }
+            in_block = false;
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out.push_str(&managed);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, out)?;
+    Ok(())
+}
+
+// ---------- continue: ~/.continue/config.yaml ----------
+// YAML: models list entry with provider=openai + apiBase. Managed block is a
+// single model entry; we rewrite by parsing lines (YAML round-trips with
+// serde_yaml would drop user comments, so we do surgical line edits).
+
+pub fn continue_config_path() -> PathBuf {
+    crate::platform::home().join(".continue").join("config.yaml")
+}
+
+pub fn write_continue(path: &Path, ep: &Endpoint) -> Result<()> {
+    let entry = format!(
+        "  - name: modelsdesk (local) # modelsdesk-managed\n\
+         provider: openai # modelsdesk-managed\n\
+         apiBase: {} # modelsdesk-managed\n\
+         model: {} # modelsdesk-managed\n\
+         roles: [chat, edit] # modelsdesk-managed\n",
+        ep.base_url, ep.model_id
+    );
+    let mut out = String::new();
+    if path.exists() {
+        let existing = std::fs::read_to_string(path)?;
+        let mut skipping = false;
+        let mut lines: Vec<&str> = Vec::new();
+        for line in existing.lines() {
+            if line.contains("# modelsdesk-managed") {
+                continue; // drop all previously managed lines
+            }
+            lines.push(line);
+        }
+        // Insert/replace under models: list.
+        if let Some(idx) = lines.iter().position(|l| l.trim() == "models:") {
+            // find insertion point: after the last list item (first non-list line after)
+            let mut insert_at = idx + 1;
+            while insert_at < lines.len()
+                && (lines[insert_at].starts_with("  - ")
+                    || lines[insert_at].starts_with("    ")
+                    || lines[insert_at].trim().is_empty())
+            {
+                insert_at += 1;
+            }
+            for l in &lines[..insert_at] {
+                out.push_str(l);
+                out.push('\n');
+            }
+            out.push_str(&entry);
+            for l in &lines[insert_at..] {
+                out.push_str(l);
+                out.push('\n');
+            }
+        } else {
+            out = lines.join("\n");
+            if !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str("\nmodels:\n");
+            out.push_str(&entry);
+        }
+    } else {
+        out = format!("name: modelsdesk\nversion: 1.0.0\nschema: v1\n\nmodels:\n{}", entry);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, out)?;
+    Ok(())
+}
+
 // ---------- dispatch ----------
 
 pub fn config_path_for(agent: &str) -> Result<PathBuf> {
@@ -322,6 +578,11 @@ pub fn config_path_for(agent: &str) -> Result<PathBuf> {
         "codex" => Ok(codex_config_path()),
         "opencode" => Ok(opencode_config_path()),
         "zed" => Ok(zed_config_path()),
+        "goose" => Ok(goose_config_path()),
+        "aider" => Ok(aider_config_path()),
+        "cline" => Ok(cline_config_path()),
+        "crush" => Ok(crush_config_path()),
+        "continue" => Ok(continue_config_path()),
         other => {
             if let Some((_, why)) = UNSUPPORTED.iter().find(|(n, _)| *n == other) {
                 anyhow::bail!("{other} is not supported: {why}");
@@ -337,6 +598,11 @@ pub fn write_for(agent: &str, path: &Path, ep: &Endpoint) -> Result<()> {
         "codex" => write_codex(path, ep),
         "opencode" => write_opencode(path, ep),
         "zed" => write_zed(path, ep),
+        "goose" => write_goose(path, ep),
+        "aider" => write_aider(path, ep),
+        "cline" => write_cline(path, ep),
+        "crush" => write_crush(path, ep),
+        "continue" => write_continue(path, ep),
         other => anyhow::bail!("unknown agent '{other}' (supported: {})", AGENTS.join(", ")),
     }
 }

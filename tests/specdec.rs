@@ -91,3 +91,18 @@ fn vllm_speculative_config() {
     let args = p.start_args(&e, "0.0.0.0", 8000).unwrap().join(" ");
     assert!(!args.contains("--speculative-config"), "{args}");
 }
+
+#[test]
+fn stray_port_parsing() {
+    // The exact cmdline of a real stray mlx-dspark on :8123.
+    let cmd = "/opt/homebrew/Cellar/python@3.15/3.15.0/Frameworks/Python.app/Contents/MacOS/Python -E /Users/talha/.local/bin/mlx-dspark serve --model openbmb/MiniCPM5-2B-MLX --mode lookup --host 127.0.0.1 --port 8123";
+    assert!(cmd.contains("mlx-dspark"));
+    let mut it = cmd.split_whitespace();
+    let mut port = None;
+    while let Some(tok) = it.next() {
+        if tok == "--port" {
+            port = it.next().and_then(|v| v.parse::<u16>().ok());
+        }
+    }
+    assert_eq!(port, Some(8123));
+}

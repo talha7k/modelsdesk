@@ -69,10 +69,31 @@ async fn run() -> Result<()> {
                 watch::animated_boot(&cfg).await?;
             }
         }
-        Commands::Stop => {
+        Commands::Stop { force } => {
             let cfg = Config::load()?;
             match server::server_status(&cfg) {
-                ServerStatus::Stopped => println!("{}", output::dim("already stopped")),
+                ServerStatus::Stopped => {
+                    println!("{}", output::dim("already stopped"));
+                    // Even when our port is free, report (and with --force,
+                    // sweep) stray provider servers on foreign ports.
+                    let strays = server::strays(&cfg);
+                    if force {
+                        let n = server::kill_strays();
+                        if n > 0 {
+                            println!("{}", output::warn(&format!("killed {n} stray provider server(s)")));
+                        } else {
+                            println!("{}", output::dim("no strays found"));
+                        }
+                    } else if !strays.is_empty() {
+                        println!("{}", output::warn(&format!(
+                            "{} stray provider server(s) on foreign ports (run with --force to sweep):",
+                            strays.len()
+                        )));
+                        for (pid, port, cmd) in strays.iter().take(5) {
+                            println!("  pid {pid} :{port}  {}", output::dim(cmd));
+                        }
+                    }
+                }
                 ServerStatus::Running { pid, port } => {
                     let tty = console::Term::stdout().is_term();
                     let pb = ProgressBar::new_spinner();
@@ -84,7 +105,7 @@ async fn run() -> Result<()> {
                         pb.set_draw_target(indicatif::ProgressDrawTarget::hidden());
                         println!("stopping pid {pid} on :{port}…");
                     }
-                    server::stop(&cfg).await?;
+                    server::stop_with_options(&cfg, force).await?;
                     let done = output::ok(&format!("port :{port} free"));
                     if tty {
                         pb.finish_with_message(done);

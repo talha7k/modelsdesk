@@ -219,6 +219,10 @@ pub async fn start_with_options(
 }
 
 pub async fn stop(cfg: &Config) -> Result<bool> {
+    stop_with_options(cfg, false).await
+}
+
+pub async fn stop_with_options(cfg: &Config, force: bool) -> Result<bool> {
     // A backend binary on OUR port is ours — regardless of who launched it.
     // A foreign process (Expo, another tool) can never match: it neither runs
     // a provider binary nor serves our API on our port.
@@ -226,17 +230,22 @@ pub async fn stop(cfg: &Config) -> Result<bool> {
     refresh(&mut sys);
     let port_str = cfg.port.to_string();
     let mut killed = false;
+    let mut pids: Vec<u32> = Vec::new();
     for (_, proc_) in sys.processes() {
         let cmd = cmd_line(proc_);
         if is_provider_cmd(&cmd) && cmd.contains(&port_str) && proc_.kill() {
             killed = true;
+            pids.push(proc_.pid().as_u32());
         }
     }
     // sysinfo misses hardened macOS processes — fall back to kill by pid.
     for pid in port_pids(cfg.port) {
         let cmd = pid_cmdline(pid).unwrap_or_default();
         if is_provider_cmd(&cmd) {
-            killed = libc_kill(pid) || killed;
+            if libc_kill(pid) {
+                killed = true;
+            }
+            pids.push(pid);
         }
     }
     let state_path = platform::state_path();
@@ -249,16 +258,40 @@ pub async fn stop(cfg: &Config) -> Result<bool> {
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
+    // Escalation: SIGKILL anything still holding our port (only with --force).
+    if force {
+        for pid in port_pids(cfg.port) {
+            let cmd = pid_cmdline(pid).unwrap_or_default();
+            if is_provider_cmd(&cmd) && libc_kill9(pid) {
+                killed = true;
+            }
+        }
+        // Also sweep strays (provider servers on foreign ports) with consent.
+        let n = kill_strays();
+        if n > 0 {
+            eprintln!("{}", crate::output::warn(&format!("killed {n} stray provider server(s) on foreign ports")));
+        }
+        for _ in 0..10 {
+            if matches!(server_status(cfg), ServerStatus::Stopped) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
     match server_status(cfg) {
         ServerStatus::Stopped => Ok(killed),
         ServerStatus::Running { .. } => {
             let holder =
                 compat::port_holder(cfg.port).unwrap_or_else(|| "another process".to_string());
-            Err(ModeldeskError::PortBusy {
+            let mut err = ModeldeskError::PortBusy {
                 port: cfg.port,
                 holder,
             }
-            .into())
+            .to_string();
+            if !force {
+                err.push_str(" — try `modelsdesk stop --force` (SIGKILL + stray sweep)");
+            }
+            anyhow::bail!("{err}")
         }
     }
 }
@@ -270,6 +303,154 @@ fn libc_kill(pid: u32) -> bool {
         fn kill(pid: i32, sig: i32) -> i32;
     }
     unsafe { kill(pid as i32, 15) == 0 }
+}
+
+#[cfg(unix)]
+fn libc_kill9(pid: u32) -> bool {
+    // SIGKILL escalation for `stop --force`.
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    unsafe { kill(pid as i32, 9) == 0 }
+}
+
+#[cfg(windows)]
+fn libc_kill9(_pid: u32) -> bool {
+    false
+}
+
+/// Provider servers running on ports modelsdesk doesn't own (e.g. launched
+/// manually for benchmarks). Returns (pid, port, cmdline-truncated).
+pub fn strays(cfg: &Config) -> Vec<(u32, u16, String)> {
+    let mut sys = System::new();
+    refresh(&mut sys);
+    let our_port = cfg.port.to_string();
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (_, proc_) in sys.processes() {
+        let cmd = cmd_line(proc_);
+        if cmd.is_empty() {
+            // Hardened process sysinfo can't read: let the ps sweep handle it
+            // (don't mark as seen or we'd skip it there too).
+            continue;
+        }
+        let pid = proc_.pid().as_u32();
+        seen.insert(pid);
+        if let Some(hit) = classify_stray(&cmd, cfg.port, &our_port) {
+            out.push((pid, hit.0, hit.1));
+        }
+    }
+    // sysinfo misses hardened macOS processes — sweep `ps` output too.
+    #[cfg(unix)]
+    {
+        if let Ok(ps) = std::process::Command::new("ps").args(["-axo", "pid=,command="]).output() {
+            if let Ok(text) = String::from_utf8(ps.stdout) {
+                for line in text.lines() {
+                    let line = line.trim_start();
+                    let Some((pid_s, cmd)) = line.split_once(char::is_whitespace) else {
+                        continue;
+                    };
+                    let Ok(pid) = pid_s.trim().parse::<u32>() else {
+                        continue;
+                    };
+                    if seen.contains(&pid) {
+                        continue;
+                    }
+                    let cmd = cmd.trim();
+                    if let Some(hit) = classify_stray(cmd, cfg.port, &our_port) {
+                        out.push((pid, hit.0, hit.1));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// (port, truncated-cmdline) if this cmdline is a provider server we don't own.
+fn classify_stray(cmd: &str, our_port: u16, our_port_str: &str) -> Option<(u16, String)> {
+    if !is_provider_cmd(cmd) {
+        return None;
+    }
+    match port_from_cmdline(cmd) {
+        Some(p) if p != our_port => Some((p, truncate(cmd))),
+        None if !cmd.contains(our_port_str) => {
+            if cmd.contains("serve") || cmd.contains("llama-server") {
+                Some((0, truncate(cmd)))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn port_from_cmdline(cmd: &str) -> Option<u16> {
+    let mut it = cmd.split_whitespace();
+    while let Some(tok) = it.next() {
+        if tok == "--port" || tok == "-p" {
+            if let Some(v) = it.next() {
+                if let Ok(p) = v.parse::<u16>() {
+                    return Some(p);
+                }
+            }
+        } else if let Some(v) = tok.strip_prefix("--port=") {
+            if let Ok(p) = v.parse::<u16>() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+fn truncate(s: &str) -> String {
+    if s.chars().count() > 80 {
+        s.chars().take(77).collect::<String>() + "..."
+    } else {
+        s.to_string()
+    }
+}
+
+/// Kill strays (provider servers on foreign ports). Only with explicit
+/// user consent (`stop --force` / `doctor --fix`), never automatically.
+pub fn kill_strays() -> usize {
+    let mut sys = System::new();
+    refresh(&mut sys);
+    let mut n = 0;
+    for (_, proc_) in sys.processes() {
+        let cmd = cmd_line(proc_);
+        if is_provider_cmd(&cmd) && (cmd.contains("serve") || cmd.contains("llama-server")) {
+            if proc_.kill() {
+                n += 1;
+            }
+        }
+    }
+    // ps fallback for hardened processes sysinfo can't signal.
+    #[cfg(unix)]
+    {
+        if let Ok(ps) = std::process::Command::new("ps").args(["-axo", "pid=,command="]).output() {
+            if let Ok(text) = String::from_utf8(ps.stdout) {
+                for line in text.lines() {
+                    let line = line.trim_start();
+                    let Some((pid_s, cmd)) = line.split_once(char::is_whitespace) else {
+                        continue;
+                    };
+                    let cmd = cmd.trim();
+                    if !(is_provider_cmd(cmd)
+                        && (cmd.contains("serve") || cmd.contains("llama-server")))
+                    {
+                        continue;
+                    }
+                    if let Ok(pid) = pid_s.trim().parse::<u32>() {
+                        if libc_kill(pid) || libc_kill9(pid) {
+                            n += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    n
 }
 
 #[cfg(windows)]

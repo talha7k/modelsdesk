@@ -6,6 +6,17 @@ semver.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-23
+
+### Added
+
+- `stop --force`: SIGTERM → wait → **SIGKILL escalation** for backends that
+  ignore SIGTERM, plus a **stray server sweep** — provider servers running on
+  ports modelsdesk doesn't own (e.g. manually launched benchmark servers)
+  are reported by plain `stop` (pid, port, cmdline) and killed with `--force`.
+  Detection works even for hardened macOS processes (sysinfo + `ps` sweep).
+- `stop` failure on a busy port now suggests `stop --force`.
+
 ## [0.4.0] - 2026-10-21
 
 ### Added

@@ -524,7 +524,6 @@ pub fn write_continue(path: &Path, ep: &Endpoint) -> Result<()> {
     let mut out = String::new();
     if path.exists() {
         let existing = std::fs::read_to_string(path)?;
-        let mut skipping = false;
         let mut lines: Vec<&str> = Vec::new();
         for line in existing.lines() {
             if line.contains("# modelsdesk-managed") {

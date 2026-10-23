@@ -76,7 +76,13 @@ pub enum Commands {
             the port (Expo, another tool) can never match and is reported by\n\
             name instead of killed."
     )]
-    Stop,
+    Stop {
+        #[arg(
+            long,
+            help = "Escalate to SIGKILL if SIGTERM doesn't finish, and sweep stray provider servers on foreign ports"
+        )]
+        force: bool,
+    },
     #[command(
         about = "Stop, then start the server",
         long_about = "Full restart cycle: stop the current backend, re-validate\n\
